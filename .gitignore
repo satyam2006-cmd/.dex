@@ -1,0 +1,30 @@
+# Dependencies
+node_modules/
+
+# ──────────────────────────────────────────────
+# v2 features — Dashboard & Web UI (not shipped in v1)
+# ──────────────────────────────────────────────
+public/
+lib/dashboard.js
+
+# ──────────────────────────────────────────────
+# Runtime data
+# ──────────────────────────────────────────────
+apps.json
+*.log
+
+# ──────────────────────────────────────────────
+# Temp / scratch
+# ──────────────────────────────────────────────
+refactor_temp/
+*.ps1.tmp
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor
+.vscode/
+.idea/
+*.swp

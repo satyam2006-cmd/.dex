@@ -1,0 +1,21 @@
+{
+  "name": "dex-cli",
+  "version": "1.0.0",
+  "description": "DEX CLI: Manage and launch web apps directly from the terminal.",
+  "type": "module",
+  "bin": {
+    ".dex": "./bin/dex.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [
+    "dex",
+    "cli",
+    "launcher",
+    "pwa",
+    "standalone"
+  ],
+  "author": "satyam2006-cmd",
+  "license": "Apache-2.0"
+}
