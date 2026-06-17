@@ -1,9 +1,10 @@
 {
   "name": "dex-cli",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "DEX CLI: Manage and launch web apps directly from the terminal.",
   "type": "module",
   "bin": {
+    "dex": "./bin/dex.js",
     ".dex": "./bin/dex.js"
   },
   "engines": {

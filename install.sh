@@ -15,22 +15,115 @@ NC='\033[0m' # No Color
 
 echo -e "\n${CYAN}=== Installing .dex CLI ===${NC}"
 
-# 1. Dependency Checks
+# Helper: Detect package manager
+detect_package_manager() {
+    if command -v brew &> /dev/null; then
+        echo "brew"
+    elif command -v apt-get &> /dev/null; then
+        echo "apt"
+    elif command -v dnf &> /dev/null; then
+        echo "dnf"
+    elif command -v yum &> /dev/null; then
+        echo "yum"
+    elif command -v pacman &> /dev/null; then
+        echo "pacman"
+    elif command -v apk &> /dev/null; then
+        echo "apk"
+    else
+        echo "none"
+    fi
+}
+
+# 1. Dependency Checks & Auto-Install
 echo -e "${BLUE}i Checking system requirements...${NC}"
 
-if ! command -v node &> /dev/null; then
-    echo -e "${RED}✗ Node.js is not installed.${NC}"
-    echo -e "${YELLOW}Please install Node.js (v18 or higher) and try again.${NC}"
-    exit 1
-fi
-echo -e "${GREEN}✓ Node.js found: $(node -v)${NC}"
+# --- Node.js & npm Check & Auto-Install ---
+if ! command -v node &> /dev/null || ! command -v npm &> /dev/null; then
+    echo -e "${YELLOW}! Node.js or npm is missing. Attempting auto-installation...${NC}"
+    
+    PM=$(detect_package_manager)
+    
+    if [ "$PM" = "brew" ]; then
+        echo -e "${BLUE}i Installing Node.js via Homebrew...${NC}"
+        brew install node
+    elif [ "$PM" = "apt" ]; then
+        echo -e "${BLUE}i Installing Node.js & npm via apt...${NC}"
+        sudo apt-get update && sudo apt-get install -y nodejs npm
+    elif [ "$PM" = "dnf" ]; then
+        echo -e "${BLUE}i Installing Node.js & npm via dnf...${NC}"
+        sudo dnf install -y nodejs npm
+    elif [ "$PM" = "yum" ]; then
+        echo -e "${BLUE}i Installing Node.js & npm via yum...${NC}"
+        sudo yum install -y nodejs npm
+    elif [ "$PM" = "pacman" ]; then
+        echo -e "${BLUE}i Installing Node.js & npm via pacman...${NC}"
+        sudo pacman -S --noconfirm nodejs npm
+    elif [ "$PM" = "apk" ]; then
+        echo -e "${BLUE}i Installing Node.js & npm via apk...${NC}"
+        sudo apk add nodejs npm
+    else
+        if [ "$(uname)" = "Darwin" ]; then
+            echo -e "${RED}✗ Node.js is missing and Homebrew is not installed.${NC}"
+            echo -e "${YELLOW}Please install Homebrew (https://brew.sh/) or install Node.js from https://nodejs.org/${NC}"
+        else
+            echo -e "${RED}✗ Node.js is missing and no supported package manager was found.${NC}"
+            echo -e "${YELLOW}Please install Node.js (v18+) manually and try again.${NC}"
+        fi
+        exit 1
+    fi
 
-if ! command -v npm &> /dev/null; then
-    echo -e "${RED}✗ npm is not installed.${NC}"
-    echo -e "${YELLOW}Please install npm/Node package manager and try again.${NC}"
-    exit 1
+    # Verify Node.js
+    if ! command -v node &> /dev/null; then
+        echo -e "${RED}✗ Node.js installation verification failed.${NC}"
+        echo -e "${YELLOW}Please install Node.js (v18+) manually and try again.${NC}"
+        exit 1
+    fi
+    # Verify npm
+    if ! command -v npm &> /dev/null; then
+        echo -e "${RED}✗ npm installation verification failed.${NC}"
+        echo -e "${YELLOW}Please install npm manually and try again.${NC}"
+        exit 1
+    fi
 fi
+
+echo -e "${GREEN}✓ Node.js found: $(node -v)${NC}"
 echo -e "${GREEN}✓ npm found: v$(npm -v)${NC}"
+
+# --- Git Check & Auto-Install ---
+GIT_AVAILABLE=false
+if command -v git &> /dev/null; then
+    GIT_AVAILABLE=true
+else
+    echo -e "${YELLOW}! Git is missing. Attempting auto-installation...${NC}"
+    PM=$(detect_package_manager)
+    
+    if [ "$PM" = "brew" ]; then
+        echo -e "${BLUE}i Installing Git via Homebrew...${NC}"
+        brew install git
+    elif [ "$PM" = "apt" ]; then
+        echo -e "${BLUE}i Installing Git via apt...${NC}"
+        sudo apt-get install -y git
+    elif [ "$PM" = "dnf" ]; then
+        echo -e "${BLUE}i Installing Git via dnf...${NC}"
+        sudo dnf install -y git
+    elif [ "$PM" = "yum" ]; then
+        echo -e "${BLUE}i Installing Git via yum...${NC}"
+        sudo yum install -y git
+    elif [ "$PM" = "pacman" ]; then
+        echo -e "${BLUE}i Installing Git via pacman...${NC}"
+        sudo pacman -S --noconfirm git
+    elif [ "$PM" = "apk" ]; then
+        echo -e "${BLUE}i Installing Git via apk...${NC}"
+        sudo apk add git
+    fi
+
+    if command -v git &> /dev/null; then
+        GIT_AVAILABLE=true
+        echo -e "${GREEN}✓ Git installed successfully: $(git --version)${NC}"
+    else
+        echo -e "${YELLOW}! Git installation failed or skipped. Will use ZIP download fallback.${NC}"
+    fi
+fi
 
 # 2. Determine installation mode (Local vs Remote)
 IS_LOCAL=false
@@ -57,8 +150,8 @@ else
         mkdir -p "$INSTALL_DIR"
     fi
 
-    # Try Git clone
-    if command -v git &> /dev/null; then
+    # Try Git clone (uses GIT_AVAILABLE from dependency check above)
+    if [ "$GIT_AVAILABLE" = true ]; then
         echo -e "${BLUE}i Cloning repository via Git...${NC}"
         if [ -d "$INSTALL_DIR/.git" ]; then
             cd "$INSTALL_DIR"
@@ -70,8 +163,8 @@ else
         fi
     else
         echo -e "${BLUE}i Git not found. Downloading via curl...${NC}"
-        ZIP_PATH="/tmp/dex-v1.0.0.zip"
-        curl -sSL "https://github.com/satyam2006-cmd/.dex/archive/refs/tags/v1.0.0.zip" -o "$ZIP_PATH"
+        ZIP_PATH="/tmp/dex-v1.0.1.zip"
+        curl -sSL "https://github.com/satyam2006-cmd/.dex/archive/refs/tags/v1.0.1.zip" -o "$ZIP_PATH"
         
         echo -e "${BLUE}i Extracting files...${NC}"
         EXTRACT_TEMP="/tmp/dex_extract_temp"
@@ -111,7 +204,7 @@ echo -e "${CYAN}"
 echo "                   ███                           "
 echo "                  ████                           .DEX CLI"
 echo "                  ████                           ------------------------"
-echo "           ███████████  ████████   ████   ███    Version: 1.0.0"
+echo "           ███████████  ████████   ████   ███    Version: 1.0.1"
 echo "         █████████████ ███████████  █████████    Status: Ready"
 echo "         ███      ████████████████   ██████      Command: .dex"
 echo " ██████  ███      ████████████████    █████      "
