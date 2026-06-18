@@ -1,10 +1,8 @@
 # .dex CLI
 
-![.dex logo](logo.png)
+![.dex CLI preview](webpreview.png)
 
 .dex is a terminal-first workspace launcher for people who live across web apps, native apps, and browser sessions. Create standalone desktop web apps, group them into named workspaces, capture the state of a working session, and relaunch it from one command.
-
-![.dex CLI preview](webpreview.png)
 
 ## Install
 
@@ -90,15 +88,6 @@ The bundled browser extension can capture live tabs from Chromium browsers for a
 .dex export <file.json>
 .dex import <file.json>
 ```
-
-## What Changed in v1.0.2
-
-- Added the release-ready workspace flow for creating, listing, launching, renaming, and deleting workspaces.
-- Added native app and system command support inside workspaces.
-- Added snapshot and browser-tab capture commands with the bundled extension path.
-- Improved installer one-shot behavior on Windows, macOS, and Linux, including Node.js version checks and dependency install.
-- Centralized CLI version output and preserved custom icon metadata in the local database.
-- Improved cross-platform URL launching when Chrome or Edge are not found.
 
 ## Data Location
 
