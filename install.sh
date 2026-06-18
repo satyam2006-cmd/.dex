@@ -49,6 +49,10 @@ download_file() {
 
 write_header "Installing .dex CLI"
 
+DEX_VERSION="1.0.2"
+REQUIRED_NODE_MAJOR=18
+PORTABLE_NODE_VERSION="22.15.0"
+
 # Helper: Detect package manager
 detect_package_manager() {
     if command -v brew &> /dev/null; then
@@ -73,8 +77,18 @@ write_info "Checking system requirements..."
 
 # --- Node.js & npm Check & Auto-Install ---
 PORTABLE_NODE_PATH=""
-if ! command -v node &> /dev/null || ! command -v npm &> /dev/null; then
-    write_warn "Node.js or npm is missing. Attempting auto-installation..."
+NODE_MAJOR=0
+if command -v node &> /dev/null; then
+    NODE_MAJOR=$(node -p "Number(process.versions.node.split('.')[0])" 2>/dev/null || echo 0)
+fi
+
+if ! command -v node &> /dev/null || ! command -v npm &> /dev/null || [ "$NODE_MAJOR" -lt "$REQUIRED_NODE_MAJOR" ]; then
+    if command -v node &> /dev/null; then
+        write_warn "Node.js $(node -v) is installed, but .dex requires v$REQUIRED_NODE_MAJOR or newer."
+    else
+        write_warn "Node.js or npm is missing."
+    fi
+    write_info "Attempting auto-installation..."
     
     PM=$(detect_package_manager)
     INSTALLED=false
@@ -121,8 +135,8 @@ if ! command -v node &> /dev/null || ! command -v npm &> /dev/null; then
             NODE_ARCH="x64"
         fi
         
-        NODE_DIR_NAME="node-v22.15.0-$NODE_OS-$NODE_ARCH"
-        NODE_URL="https://nodejs.org/dist/v22.15.0/$NODE_DIR_NAME.tar.gz"
+        NODE_DIR_NAME="node-v$PORTABLE_NODE_VERSION-$NODE_OS-$NODE_ARCH"
+        NODE_URL="https://nodejs.org/dist/v$PORTABLE_NODE_VERSION/$NODE_DIR_NAME.tar.gz"
         
         NODE_BIN_PARENT="$HOME/.node"
         mkdir -p "$NODE_BIN_PARENT"
@@ -146,21 +160,24 @@ if ! command -v node &> /dev/null || ! command -v npm &> /dev/null; then
     fi
 
     # Verify Node.js
-    if ! command -v node &> /dev/null; then
+    NODE_MAJOR=$(node -p "Number(process.versions.node.split('.')[0])" 2>/dev/null || echo 0)
+    if ! command -v node &> /dev/null || [ "$NODE_MAJOR" -lt "$REQUIRED_NODE_MAJOR" ]; then
         write_error "Node.js installation verification failed."
         echo -e "${YELLOW}Please install Node.js (v18+) manually and try again.${NC}"
         exit 1
     fi
     # Verify npm
     if ! command -v npm &> /dev/null; then
-        write_error "npm installation verification failed."
-        echo -e "${YELLOW}Please install npm manually and try again.${NC}"
-        exit 1
+        write_warn "npm installation verification failed. .dex has no third-party runtime dependencies, so the installer will use direct command wrappers."
     fi
 fi
 
 write_success "Node.js found: $(node -v)"
-write_success "npm found: v$(npm -v)"
+if command -v npm &> /dev/null; then
+    write_success "npm found: v$(npm -v)"
+else
+    write_warn "npm not found; continuing with direct command wrappers."
+fi
 
 # --- Git Check & Auto-Install ---
 GIT_AVAILABLE=false
@@ -266,18 +283,39 @@ fi
 write_info "Linking .dex CLI globally..."
 cd "$INSTALL_DIR"
 
-# Try link normally
-if npm link --force &>/dev/null; then
-    write_success "Linked globally without sudo."
-else
-    write_warn "Local link failed. Retrying with sudo..."
-    if sudo npm link --force; then
-        write_success "Linked globally with sudo."
+if command -v npm &> /dev/null; then
+    write_info "Installing package dependencies..."
+    npm install --omit=dev
+
+    # Try link normally
+    if npm link --force &>/dev/null; then
+        write_success "Linked globally without sudo."
     else
-        write_error "Failed to link CLI. Check your npm permissions."
-        exit 1
+        write_warn "Local npm link failed. Retrying with sudo..."
+        if sudo npm link --force; then
+            write_success "Linked globally with sudo."
+        else
+            write_warn "npm link failed. Falling back to direct command wrappers."
+        fi
     fi
+else
+    write_info "Skipping npm link because npm is unavailable."
 fi
+
+USER_BIN="$HOME/.local/bin"
+mkdir -p "$USER_BIN"
+export PATH="$USER_BIN:$PATH"
+DEX_ENTRY="$INSTALL_DIR/bin/dex.js"
+cat > "$USER_BIN/dex" << DEXCLI
+#!/bin/sh
+exec node "$DEX_ENTRY" "\$@"
+DEXCLI
+cat > "$USER_BIN/.dex" << DEXDOTCLI
+#!/bin/sh
+exec node "$DEX_ENTRY" "\$@"
+DEXDOTCLI
+chmod +x "$USER_BIN/dex" "$USER_BIN/.dex"
+write_success "Created dex and .dex command wrappers in $USER_BIN."
 
 # On Unix/macOS, npm link creates extensionless shim files alongside the symlinks.
 # Clean up any extensionless files that could cause "permission denied" or ambiguity issues.
@@ -314,6 +352,11 @@ configure_shell_profile() {
             echo "export PATH=\"$PORTABLE_NODE_PATH/bin:\$PATH\"" >> "$profile_file"
             write_success "Added portable Node.js path to $shell_name profile ($profile_file)"
         fi
+    fi
+
+    if ! grep -q "$HOME/.local/bin" "$profile_file" 2>/dev/null; then
+        echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$profile_file"
+        write_success "Added user bin directory to $shell_name profile ($profile_file)"
     fi
     
     if ! grep -q "function .dex\|alias .dex=" "$profile_file" 2>/dev/null; then
@@ -355,6 +398,10 @@ case "$CURRENT_SHELL" in
                 write_success "Added portable Node.js path to fish config ($FISH_CONFIG)"
             fi
         fi
+        if ! grep -q "$HOME/.local/bin" "$FISH_CONFIG" 2>/dev/null; then
+            echo "fish_add_path $HOME/.local/bin" >> "$FISH_CONFIG"
+            write_success "Added user bin directory to fish config ($FISH_CONFIG)"
+        fi
         if ! grep -q "function .dex\|alias .dex=" "$FISH_CONFIG" 2>/dev/null; then
             cat >> "$FISH_CONFIG" << 'DEXFISH'
 
@@ -383,7 +430,7 @@ esac
 echo -e ""
 echo -e "${CYAN}     .DEX CLI Setup Complete${NC}"
 echo -e "${CYAN}     ------------------------${NC}"
-echo -e "${CYAN}     Version: 1.0.1${NC}"
+echo -e "${CYAN}     Version: $DEX_VERSION${NC}"
 echo -e "${CYAN}     Command: .dex${NC}"
 echo -e ""
 
@@ -395,4 +442,3 @@ echo -e "  .dex list                - List registered apps"
 echo -e "  .dex help                - See all command options"
 
 echo -e "\n${GREEN}Restart your terminal to begin using .dex from any directory!${NC}\n"
-

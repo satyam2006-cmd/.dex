@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { spawn, exec } from 'child_process';
+import os from 'os';
 
 // Dynamic path resolution on Windows
 const localAppData = process.env.LOCALAPPDATA || '';
@@ -43,13 +44,19 @@ export function launchUrl(url, preferredBrowser = 'auto') {
 
   // If no specific Chromium binary was found in standard paths, attempt to spawn by command
   if (!browserPath) {
-    // Check if we can fallback to standard start commands, or run default browser using start command
     return new Promise((resolve) => {
-      // Launch using start which opens the default browser (though not in standalone mode)
-      const command = `start "" "${url}"`;
+      const platform = os.platform();
+      let command;
+      if (platform === 'win32') {
+        command = `start "" "${url}"`;
+      } else if (platform === 'darwin') {
+        command = `open "${url.replace(/"/g, '\\"')}"`;
+      } else {
+        command = `xdg-open "${url.replace(/"/g, '\\"')}"`;
+      }
       exec(command, (err) => {
         if (err) {
-          console.error('Failed to open default browser via shell:', err);
+          console.error('Failed to open default browser via shell:', err.message || err);
           resolve(false);
         } else {
           resolve(true);

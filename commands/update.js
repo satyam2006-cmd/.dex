@@ -1,5 +1,5 @@
 import { getApp, updateApp } from '../storage/db.js';
-import { createDesktopShortcut, removeDesktopShortcut } from '../core/shortcut.js';
+import { createDesktopShortcut, removeDesktopShortcut, unlockDesktopShortcut } from '../core/shortcut.js';
 import { style } from './utils.js';
 
 export default {
@@ -8,7 +8,7 @@ export default {
   description: 'Update app URL, name, hidden status, or workspaces',
   async execute(args) {
     if (args.length === 0) {
-      console.log(`${style.red}Error: Please specify app ID. Usage: update <app-id> [--url <url>] [--name <name>] [--hidden <true|false>] [--workspace <ws>]${style.reset}`);
+      console.log(`${style.red}Error: Please specify app ID. Usage: update <app-id> [--url <url>] [--name <name>] [--hidden <true|false>] [--unlock] [--workspace <ws>]${style.reset}`);
       return;
     }
 
@@ -41,13 +41,18 @@ export default {
       fields.hidden = args[hiddenIdx + 1].toLowerCase() === 'true';
     }
 
+    const unlockIdx = args.indexOf('--unlock');
+    if (unlockIdx !== -1) {
+      fields.hidden = false;
+    }
+
     const wsIdx = args.indexOf('--workspace');
     if (wsIdx !== -1 && args[wsIdx + 1]) {
       fields.workspaces = args[wsIdx + 1].split(',').map(s => s.trim());
     }
 
     if (Object.keys(fields).length === 0) {
-      console.log(`${style.yellow}No updates provided. Use flags like --url, --name, --hidden, --workspace.${style.reset}`);
+      console.log(`${style.yellow}No updates provided. Use flags like --url, --name, --hidden, --unlock, --workspace.${style.reset}`);
       return;
     }
 
@@ -56,11 +61,16 @@ export default {
       removeDesktopShortcut(app.name);
     }
 
+    // If unlocking, reveal files
+    if (fields.hidden === false) {
+      unlockDesktopShortcut(app.name);
+    }
+
     const updatedApp = updateApp(appId, fields);
     
     // Recreate shortcut with updated configs
     try {
-      await createDesktopShortcut(updatedApp.name, updatedApp.id, updatedApp.hidden);
+      await createDesktopShortcut(updatedApp.name, updatedApp.id, updatedApp.hidden, updatedApp.iconPath);
       console.log(`${style.green}App "${updatedApp.name}" updated successfully!${style.reset}`);
     } catch (err) {
       console.log(`${style.green}App metadata updated, but shortcut recreation failed.${style.reset}`);

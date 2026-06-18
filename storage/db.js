@@ -1,11 +1,13 @@
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
+import { VERSION } from '../core/version.js';
 
 const DB_DIR = path.join(os.homedir(), '.dex');
 const DB_PATH = path.join(DB_DIR, 'apps.json');
 
 const INITIAL_DB = {
+  version: VERSION,
   apps: {},
   workspaces: {},
   launches_log: []
@@ -32,10 +34,16 @@ export function readDb(forceRefresh = false) {
   try {
     const content = fs.readFileSync(DB_PATH, 'utf-8');
     cachedDb = JSON.parse(content);
+    // Ensure essential structure is present
+    if (!cachedDb) cachedDb = { ...INITIAL_DB };
+    if (!cachedDb.apps) cachedDb.apps = {};
+    if (!cachedDb.workspaces) cachedDb.workspaces = {};
+    if (!cachedDb.launches_log) cachedDb.launches_log = [];
+    if (!cachedDb.version) cachedDb.version = VERSION;
     return cachedDb;
   } catch (err) {
     console.error('Failed to read database, resetting to initial state.', err);
-    cachedDb = INITIAL_DB;
+    cachedDb = { ...INITIAL_DB };
     return cachedDb;
   }
 }
@@ -55,8 +63,11 @@ export function getApps() {
 }
 
 export function getApp(id) {
+  if (!id || typeof id !== 'string') return null;
   const db = readDb();
-  return db.apps[id.toLowerCase()] || null;
+  const key = id.toLowerCase();
+  if (db.apps[key]) return db.apps[key];
+  return Object.values(db.apps).find(app => app.name?.toLowerCase() === key) || null;
 }
 
 export function addApp(app) {
@@ -68,13 +79,16 @@ export function addApp(app) {
   db.apps[id] = {
     id,
     name: app.name,
-    url: app.url,
+    url: app.url || null,
+    type: app.type || existingApp.type || 'web',
+    path: app.path || existingApp.path || null,
     created: existingApp.created || new Date().toISOString(),
     lastOpened: existingApp.lastOpened || null,
     launches: existingApp.launches || 0,
     category: app.category || 'General',
     workspaces: app.workspaces || existingApp.workspaces || [],
-    hidden: app.hidden ?? existingApp.hidden ?? false
+    hidden: app.hidden ?? existingApp.hidden ?? false,
+    iconPath: app.iconPath || existingApp.iconPath || null
   };
   
   // Make sure workspaces database has references updated if specified
@@ -107,6 +121,8 @@ export function updateApp(id, fields) {
   
   if (fields.name !== undefined) app.name = fields.name;
   if (fields.url !== undefined) app.url = fields.url;
+  if (fields.type !== undefined) app.type = fields.type;
+  if (fields.path !== undefined) app.path = fields.path;
   if (fields.category !== undefined) app.category = fields.category;
   if (fields.hidden !== undefined) app.hidden = fields.hidden;
   
@@ -169,6 +185,7 @@ export function getWorkspaces() {
 }
 
 export function getWorkspace(id) {
+  if (!id || typeof id !== 'string') return null;
   const db = readDb();
   return db.workspaces[id.toLowerCase()] || null;
 }
@@ -176,11 +193,13 @@ export function getWorkspace(id) {
 export function addWorkspace(name, appIds = []) {
   const db = readDb();
   const id = name.toLowerCase();
+  const existingWorkspace = db.workspaces[id] || {};
   
   db.workspaces[id] = {
     id,
     name: name,
-    apps: appIds.map(appId => appId.toLowerCase())
+    apps: appIds.map(appId => appId.toLowerCase()),
+    snapshot: existingWorkspace.snapshot || null
   };
   
   // Update workspace lists in apps
@@ -200,13 +219,17 @@ export function addWorkspace(name, appIds = []) {
 }
 
 export function deleteWorkspace(id) {
+  if (!id || typeof id !== 'string') return false;
   const db = readDb();
   const key = id.toLowerCase();
   if (!db.workspaces[key]) return false;
   
   // Update apps
   Object.keys(db.apps).forEach(appKey => {
-    db.apps[appKey].workspaces = db.apps[appKey].workspaces.filter(wsId => wsId !== key);
+    const app = db.apps[appKey];
+    if (app && app.workspaces) {
+      app.workspaces = app.workspaces.filter(wsId => wsId !== key);
+    }
   });
   
   delete db.workspaces[key];

@@ -8,7 +8,7 @@ import { getBrowsers } from './launcher.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-export function createDesktopShortcut(appName, appId, isHidden = false) {
+export function createDesktopShortcut(appName, appId, isHidden = false, customIconPath = null) {
   return new Promise((resolve, reject) => {
     const desktopPath = path.join(os.homedir(), 'Desktop');
     const startMenuPath = path.join(process.env.APPDATA, 'Microsoft', 'Windows', 'Start Menu', 'Programs');
@@ -19,7 +19,9 @@ export function createDesktopShortcut(appName, appId, isHidden = false) {
     // Detect browser paths to borrow their icons if possible
     let iconPath = 'msedge.exe,0'; // Default fallback
     
-    if (isHidden) {
+    if (customIconPath) {
+      iconPath = customIconPath;
+    } else if (isHidden) {
       const lowerName = appName.toLowerCase();
       const lowerId = appId.toLowerCase();
       if (lowerName.includes('note') || lowerId.includes('note') || lowerName.includes('text') || lowerId.includes('text')) {
@@ -116,10 +118,38 @@ export function createDesktopShortcut(appName, appId, isHidden = false) {
       if (err) {
         reject(err);
       } else {
+        if (isHidden) {
+          try {
+            execSync(`attrib +h "${desktopShortcutPath}"`);
+          } catch (_) {}
+          try {
+            execSync(`attrib +h "${startMenuShortcutPath}"`);
+          } catch (_) {}
+        }
         resolve(desktopShortcutPath);
       }
     });
   });
+}
+
+export function unlockDesktopShortcut(appName) {
+  const desktopPath = path.join(os.homedir(), 'Desktop');
+  const startMenuPath = path.join(process.env.APPDATA, 'Microsoft', 'Windows', 'Start Menu', 'Programs');
+  
+  const desktopShortcutPath = path.join(desktopPath, `${appName}.lnk`);
+  const startMenuShortcutPath = path.join(startMenuPath, `${appName}.lnk`);
+  
+  try {
+    if (fs.existsSync(desktopShortcutPath)) {
+      execSync(`attrib -h "${desktopShortcutPath}"`);
+    }
+  } catch (_) {}
+  
+  try {
+    if (fs.existsSync(startMenuShortcutPath)) {
+      execSync(`attrib -h "${startMenuShortcutPath}"`);
+    }
+  } catch (_) {}
 }
 
 export function removeDesktopShortcut(appName) {
@@ -131,6 +161,18 @@ export function removeDesktopShortcut(appName) {
   
   let success = false;
   
+  // Try to remove hidden attribute first to ensure we can delete it
+  try {
+    if (fs.existsSync(desktopShortcutPath)) {
+      execSync(`attrib -h "${desktopShortcutPath}"`);
+    }
+  } catch (_) {}
+  try {
+    if (fs.existsSync(startMenuShortcutPath)) {
+      execSync(`attrib -h "${startMenuShortcutPath}"`);
+    }
+  } catch (_) {}
+
   if (fs.existsSync(desktopShortcutPath)) {
     try {
       fs.unlinkSync(desktopShortcutPath);

@@ -7,6 +7,7 @@ import path from 'path';
 import { getCommand } from '../commands/index.js';
 import { getApps, getWorkspaces, getStats, getRecent } from '../storage/db.js';
 import { style, formatRelativeTime, getSystemUptime } from '../commands/utils.js';
+import { scanOsApps } from '../core/osApps.js';
 
 const historyFile = path.join(os.homedir(), '.dex', 'history.txt');
 
@@ -39,6 +40,36 @@ function saveHistory(command) {
   }
 }
 
+/**
+ * A robust parser that splits a line into arguments while respecting single and double quotes.
+ */
+export function parseArgs(line) {
+  const args = [];
+  let current = '';
+  let inDoubleQuote = false;
+  let inSingleQuote = false;
+  
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i];
+    if (char === '"' && !inSingleQuote) {
+      inDoubleQuote = !inDoubleQuote;
+    } else if (char === "'" && !inDoubleQuote) {
+      inSingleQuote = !inSingleQuote;
+    } else if (char === ' ' && !inDoubleQuote && !inSingleQuote) {
+      if (current) {
+        args.push(current);
+        current = '';
+      }
+    } else {
+      current += char;
+    }
+  }
+  if (current) {
+    args.push(current);
+  }
+  return args;
+}
+
 // Branded Startup Screen
 function showBrandedStartupScreen() {
   const stats = getStats();
@@ -48,6 +79,11 @@ function showBrandedStartupScreen() {
   const osRelease = os.release();
   const uptime = getSystemUptime();
   
+  const recent = getRecent();
+  const lastLaunchedText = recent.length > 0
+    ? `${recent[0].name} (${formatRelativeTime(recent[0].lastOpened)})`
+    : 'None';
+
   const logo = [
     `                   \x1b[38;2;255;255;255m█\x1b[38;2;255;255;255m█\x1b[38;2;43;43;43m█                        ${style.reset}`,
     `                  \x1b[38;2;63;63;63m█\x1b[38;2;255;255;255m█\x1b[38;2;255;255;255m█\x1b[38;2;72;72;72m█                        ${style.reset}`,
@@ -71,7 +107,7 @@ function showBrandedStartupScreen() {
     `${style.dim}------------------------${style.reset}`,
     `${style.bold}Total Apps:${style.reset} ${stats.totalApps}`,
     `${style.bold}Total Launches:${style.reset} ${stats.totalLaunches}`,
-    `${style.bold}Most Active:${style.reset} ${stats.mostUsedName}`,
+    `${style.bold}Last Launched:${style.reset} ${lastLaunchedText}`,
     ``,
     `${style.dim}Tip: Type ${style.reset}${style.bold}help${style.reset}${style.dim} to see all commands`,
     `${style.dim}Type ${style.reset}${style.bold}exit${style.reset}${style.dim} to quit shell`
@@ -92,75 +128,152 @@ export function completer(line) {
   const builtInCommands = [
     'launch', 'create', 'update', 'list', 'search', 'remove', 
     'recent', 'stats', 'info', 'export', 'import', 'suggest', 
-    'clean', 'summarize', 'help', 'exit', 'workspace', 'clear', 'cls'
+    'clean', 'summarize', 'help', 'exit', 'workspace', 'snapshot', 'capture', 'clear', 'cls'
   ];
 
   const apps = getApps();
   const appNames = apps.map(a => a.name.toLowerCase());
   const appIds = apps.map(a => a.id);
+  let osAppNames = [];
+  try {
+    osAppNames = Object.values(scanOsApps()).map(app => app.name.toLowerCase());
+  } catch (_) {}
   const workspaces = Object.keys(getWorkspaces());
 
-  const parts = line.trimStart().split(/\s+/);
-  const currentWord = parts[parts.length - 1] || '';
+  const rawParts = line.trimStart().split(/\s+/);
+  const currentWord = rawParts[rawParts.length - 1] || '';
   const isTrailingSpace = line.endsWith(' ');
 
   // If we're at the very start of the line or only typing the command name
-  if (parts.length === 0 || (parts.length === 1 && !isTrailingSpace)) {
-    const query = parts[0] ? parts[0].toLowerCase() : '';
-    // Suggest commands and also app names (since unknown commands fallback to launch <app-name>)
+  if (rawParts.length === 0 || (rawParts.length === 1 && !isTrailingSpace)) {
+    const query = rawParts[0] ? rawParts[0].toLowerCase() : '';
     const candidates = [...builtInCommands, ...appIds, ...appNames];
     const uniqueCandidates = [...new Set(candidates)];
     const hits = uniqueCandidates.filter(c => c.startsWith(query));
     return [hits.length ? hits : uniqueCandidates, query];
   }
 
-  // We are parsing arguments of a command
-  const cmd = parts[0].toLowerCase();
+  const cmd = rawParts[0].toLowerCase();
 
-  if (cmd === 'launch' || cmd === 'remove' || cmd === 'info' || cmd === 'update') {
+  if (cmd === 'launch') {
+    const query = isTrailingSpace ? '' : currentWord.toLowerCase();
+    if (rawParts.includes('-os') || rawParts.includes('--os')) {
+      const candidates = [...new Set(osAppNames)];
+      const hits = candidates.filter(c => c.startsWith(query) || c.includes(query));
+      return [hits, query];
+    }
+    const candidates = [...appIds, ...appNames, '-os', '--workspace'];
+    const hits = candidates.filter(c => c.startsWith(query));
+    return [hits, query];
+  }
+
+  if (cmd === 'remove' || cmd === 'info' || cmd === 'update') {
     const query = isTrailingSpace ? '' : currentWord.toLowerCase();
     const candidates = [...appIds, ...appNames];
     const hits = candidates.filter(c => c.startsWith(query));
     return [hits, query];
   }
 
+  if (cmd === 'capture') {
+    const query = isTrailingSpace ? '' : currentWord.toLowerCase();
+    if (rawParts.length === 2 && !isTrailingSpace) {
+      const candidates = ['install', 'status', ...workspaces];
+      const hits = candidates.filter(c => c.startsWith(query));
+      return [hits, query];
+    }
+    if (rawParts.length === 2 && isTrailingSpace) {
+      return [['install', 'status', ...workspaces], ''];
+    }
+  }
+
+  if (cmd === 'snapshot') {
+    const query = isTrailingSpace ? '' : currentWord.toLowerCase();
+    if (rawParts.length === 2 && !isTrailingSpace) {
+      const candidates = ['save', 'restore'];
+      const hits = candidates.filter(c => c.startsWith(query));
+      return [hits, query];
+    }
+    if (rawParts.length === 2 && isTrailingSpace) {
+      return [['save', 'restore'], ''];
+    }
+    if (rawParts[1] === 'restore') {
+      const hits = workspaces.filter(w => w.startsWith(query));
+      return [hits, query];
+    }
+  }
+
   if (cmd === 'workspace') {
-    // workspace subcommand
-    if (parts.length === 2 && !isTrailingSpace) {
-      const query = parts[1].toLowerCase();
-      const candidates = ['create', 'add', 'remove', 'list'];
+    if (rawParts.length === 2 && !isTrailingSpace) {
+      const query = rawParts[1].toLowerCase();
+      const candidates = ['create', 'delete', 'remove', 'rename', 'update', 'list', 'add', 'remove-app', 'launch', 'snapshot', 'import'];
       const hits = candidates.filter(c => c.startsWith(query));
       return [hits, query];
     }
 
-    if (parts.length === 2 && isTrailingSpace) {
-      // User typed "workspace " -> suggest subcommands
-      const candidates = ['create', 'add', 'remove', 'list'];
+    if (rawParts.length === 2 && isTrailingSpace) {
+      const candidates = ['create', 'delete', 'remove', 'rename', 'update', 'list', 'add', 'remove-app', 'launch', 'snapshot', 'import'];
       return [candidates, ''];
     }
 
-    // workspace add/remove subcommand arguments
-    const sub = parts[1].toLowerCase();
-    if (sub === 'add' || sub === 'remove' || sub === 'delete') {
-      if (parts.length === 3 && !isTrailingSpace) {
-        // user typed "workspace add co" -> complete workspace name
-        const query = parts[2].toLowerCase();
+    const sub = rawParts[1].toLowerCase();
+    const query = isTrailingSpace ? '' : currentWord.toLowerCase();
+
+    if (currentWord === '-w' || rawParts.includes('-w')) {
+      const wIdx = rawParts.indexOf('-w');
+      if (wIdx === rawParts.length - 1 && isTrailingSpace) {
+        return [workspaces, ''];
+      }
+      if (wIdx === rawParts.length - 2 && !isTrailingSpace) {
         const hits = workspaces.filter(w => w.startsWith(query));
         return [hits, query];
       }
-
-      if (parts.length === 3 && isTrailingSpace) {
-        // user typed "workspace add coding " -> complete app names
-        const candidates = [...appIds, ...appNames];
-        return [candidates, ''];
-      }
-
-      if (parts.length === 4 && !isTrailingSpace) {
-        // user typed "workspace add coding gi" -> complete app names
-        const query = parts[3].toLowerCase();
+      if (sub === 'add' || sub === 'remove' || sub === 'remove-app') {
         const candidates = [...appIds, ...appNames];
         const hits = candidates.filter(c => c.startsWith(query));
         return [hits, query];
+      }
+      if (sub === 'import') {
+        const candidates = ['chrome', 'edge', 'brave', 'opera', 'firefox'];
+        const hits = candidates.filter(c => c.startsWith(query));
+        return [hits, query];
+      }
+      if (sub === 'snapshot') {
+        const candidates = ['save', 'restore'];
+        const hits = candidates.filter(c => c.startsWith(query));
+        return [hits, query];
+      }
+    } else {
+      if (rawParts.length === 3 && !isTrailingSpace) {
+        const hits = workspaces.filter(w => w.startsWith(query));
+        return [hits, query];
+      }
+      if (rawParts.length === 3 && isTrailingSpace) {
+        if (sub === 'add' || sub === 'remove' || sub === 'remove-app') {
+          return [[...appIds, ...appNames], ''];
+        }
+        if (sub === 'import') {
+          return [['chrome', 'edge', 'brave', 'opera', 'firefox'], ''];
+        }
+        if (sub === 'snapshot') {
+          return [['save', 'restore'], ''];
+        }
+      }
+      if (rawParts.length === 4 && !isTrailingSpace) {
+        if (sub === 'add' || sub === 'remove' || sub === 'remove-app') {
+          const candidates = [...appIds, ...appNames];
+          const hits = candidates.filter(c => c.startsWith(query));
+          return [hits, query];
+        }
+        if (sub === 'import') {
+          const candidates = ['chrome', 'edge', 'brave', 'opera', 'firefox'];
+          const hits = candidates.filter(c => c.startsWith(query));
+          return [hits, query];
+        }
+        if (sub === 'snapshot') {
+          const candidates = ['save', 'restore'];
+          const hits = candidates.filter(c => c.startsWith(query));
+          return [hits, query];
+        }
       }
     }
   }
@@ -214,7 +327,7 @@ export async function startRepl() {
 
       saveHistory(trimmed);
 
-      const parts = trimmed.split(/\s+/);
+      const parts = parseArgs(trimmed);
       const cmdName = parts[0];
       const cmdArgs = parts.slice(1);
 
@@ -222,14 +335,24 @@ export async function startRepl() {
       if (cmd) {
         await cmd.execute(cmdArgs, { rl, isInteractiveShell: true });
       } else {
-        // Fallback: Unknown commands should attempt: launch <app-name>
+        // Fallback 1: Check if it's a registered DEX web app (e.g. `github`)
         const app = getApps().find(a => a.id === cmdName.toLowerCase() || a.name.toLowerCase() === cmdName.toLowerCase());
         if (app) {
           const launchCmd = getCommand('launch');
           await launchCmd.execute([app.id], { rl, isInteractiveShell: true });
         } else {
-          console.log(`${style.red}Command or App "${cmdName}" not recognized.${style.reset}`);
-          console.log(`Type ${style.bold}help${style.reset} to see available commands.`);
+          // Fallback 2: Check if it's a scanned OS application (e.g. `discord` or `spotify`)
+          const { launchOsApp, launchSystemCommand } = await import('../core/osApps.js');
+          const osResult = await launchOsApp(cmdName);
+          if (osResult.success) {
+            console.log(`Launching OS App "${osResult.app.name}"...`);
+          } else {
+            const success = await launchSystemCommand(cmdName, cmdArgs);
+            if (!success) {
+              console.log(`${style.red}Command, Web App, or OS Program "${cmdName}" not recognized.${style.reset}`);
+              console.log(`Type ${style.bold}help${style.reset} to see available commands.`);
+            }
+          }
         }
       }
     } catch (err) {

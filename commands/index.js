@@ -15,6 +15,8 @@ import helpCmd from './help.js';
 import workspaceCmd from './workspace.js';
 import updateCmd from './update.js';
 import serveCmd from './serve.js';
+import snapshotCmd from './snapshot.js';
+import captureCmd from './capture.js';
 
 const commands = [
   createCmd,
@@ -33,7 +35,9 @@ const commands = [
   helpCmd,
   workspaceCmd,
   updateCmd,
-  serveCmd
+  serveCmd,
+  snapshotCmd,
+  captureCmd
 ];
 
 const registry = {};

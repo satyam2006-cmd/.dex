@@ -1,7 +1,7 @@
 {
   "name": "dex-cli",
-  "version": "1.0.1",
-  "description": "DEX CLI: Manage and launch web apps directly from the terminal.",
+  "version": "1.0.2",
+  "description": ".dex CLI: create desktop web apps, launch native apps, and manage named workspaces from the terminal.",
   "type": "module",
   "bin": {
     "dex": "./bin/dex.js",
@@ -10,6 +10,21 @@
   "engines": {
     "node": ">=18.0.0"
   },
+  "scripts": {
+    "smoke": "node bin/dex.js --version && node bin/dex.js help"
+  },
+  "files": [
+    "bin",
+    "commands",
+    "core",
+    "extension",
+    "shell",
+    "storage",
+    "logo.png",
+    "webpreview.png",
+    "README.md",
+    "LICENSE"
+  ],
   "keywords": [
     "dex",
     "cli",

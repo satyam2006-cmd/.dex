@@ -7,13 +7,38 @@ export default {
   description: 'Launch specified app(s) or workspace',
   async execute(args) {
     if (args.length === 0) {
-      console.log(`${style.red}Error: Please specify app names or use --workspace <name>${style.reset}`);
+      console.log(`${style.red}Error: Please specify app names, -os <app>, or --workspace <name>${style.reset}`);
       return;
     }
 
     let appsToLaunch = [];
     let workspaceMode = false;
     let workspaceName = '';
+    const osIndex = args.findIndex(arg => arg === '-os' || arg === '--os');
+    if (osIndex !== -1) {
+      let osNames = args.slice(osIndex + 1).filter(arg => arg !== '-os' && arg !== '--os');
+      if (osNames.length === 0) {
+        console.log(`${style.red}Error: Please specify an OS app name. Example: launch -os vscode${style.reset}`);
+        return;
+      }
+
+      const { launchOsApp, resolveOsApp } = await import('../core/osApps.js');
+      const joinedName = osNames.join(' ');
+      if (osNames.length > 1 && resolveOsApp(joinedName)) {
+        osNames = [joinedName];
+      }
+
+      console.log(`Launching ${osNames.length} OS app${osNames.length !== 1 ? 's' : ''}...`);
+      for (const name of osNames) {
+        const result = await launchOsApp(name);
+        if (result.success) {
+          console.log(` ${tick} ${result.app?.name || name}`);
+        } else {
+          console.log(` ${cross} ${name} (OS app not found)`);
+        }
+      }
+      return;
+    }
 
     const wsIndex = args.findIndex(arg => arg === '--workspace' || arg === '-w');
     if (wsIndex !== -1) {
@@ -34,7 +59,9 @@ export default {
       appsToLaunch = ws.apps.map(id => getApp(id)).filter(Boolean);
       
       if (appsToLaunch.length === 0) {
-        console.log('No apps assigned to this workspace.');
+        console.log(`${style.yellow}Nothing's here yet! Add apps to workspace "${ws.name}" using:${style.reset}`);
+        console.log(`  workspace add -w ${ws.name} <app-name>`);
+        console.log(`  create <url> [name] -w ${ws.name}`);
         return;
       }
     } else {
@@ -44,7 +71,24 @@ export default {
         if (app) {
           appsToLaunch.push(app);
         } else {
-          console.log(`${cross} App "${name}" not found. Type ".dex list" to check names.`);
+          // Check if it's a scanned OS app
+          const { resolveOsApp } = await import('../core/osApps.js');
+          const osApp = resolveOsApp(name);
+          if (osApp) {
+            appsToLaunch.push({
+              id: name.toLowerCase(),
+              name: osApp.name,
+              type: 'os',
+              path: osApp.path
+            });
+          } else {
+            // Fallback: treat as raw system command
+            appsToLaunch.push({
+              id: name.toLowerCase(),
+              name: name,
+              type: 'system'
+            });
+          }
         }
       }
     }
@@ -54,9 +98,22 @@ export default {
     if (appsToLaunch.length === 1 && !workspaceMode) {
       const app = appsToLaunch[0];
       console.log(`Launching ${app.name}...`);
-      const success = await launchUrl(app.url);
+      
+      let success = false;
+      if (app.type === 'os') {
+        const { launchPath } = await import('../core/osApps.js');
+        success = await launchPath(app.path);
+      } else if (app.type === 'system') {
+        const { launchSystemCommand } = await import('../core/osApps.js');
+        success = await launchSystemCommand(app.name);
+      } else {
+        success = await launchUrl(app.url);
+      }
+
       if (success) {
-        logLaunch(app.id);
+        if (app.id) {
+          logLaunch(app.id);
+        }
         console.log(`${style.green}App Started Successfully${style.reset}`);
       } else {
         console.log(`${style.red}Failed to start app.${style.reset}`);
@@ -64,9 +121,21 @@ export default {
     } else {
       console.log(`Launching ${appsToLaunch.length} Apps...`);
       for (const app of appsToLaunch) {
-        const success = await launchUrl(app.url);
+        let success = false;
+        if (app.type === 'os') {
+          const { launchPath } = await import('../core/osApps.js');
+          success = await launchPath(app.path);
+        } else if (app.type === 'system') {
+          const { launchSystemCommand } = await import('../core/osApps.js');
+          success = await launchSystemCommand(app.name);
+        } else {
+          success = await launchUrl(app.url);
+        }
+
         if (success) {
-          logLaunch(app.id);
+          if (app.id) {
+            logLaunch(app.id);
+          }
           console.log(` ${tick} ${app.name}`);
         } else {
           console.log(` ${cross} ${app.name} (failed to launch)`);

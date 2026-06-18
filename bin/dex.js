@@ -2,6 +2,7 @@
 
 import { executeCommand, getCommand } from '../commands/index.js';
 import { getApps } from '../storage/db.js';
+import { VERSION } from '../core/version.js';
 
 async function main() {
   process.title = '.dex';
@@ -20,7 +21,7 @@ async function main() {
 
   // Version flag
   if (args.includes('-v') || args.includes('--version')) {
-    console.log('.DEX CLI v1.0.1');
+    console.log(`.dex CLI v${VERSION}`);
     return;
   }
 
@@ -42,7 +43,7 @@ async function main() {
       process.exit(1);
     }
   } else {
-    // Fallback: Check if it's an app name (e.g. `.dex github`)
+    // Fallback 1: Check if it's a registered DEX web app (e.g. `.dex github`)
     const app = getApps().find(
       a => a.id === cmdName.toLowerCase() || a.name.toLowerCase() === cmdName.toLowerCase()
     );
@@ -54,8 +55,23 @@ async function main() {
         process.exit(1);
       }
     } else {
-      console.error(`Command or App "${cmdName}" not recognized.`);
-      console.error(`Type ".dex help" to see available commands or registered apps.`);
+      // Fallback 2: Check if it's a scanned OS application (e.g. `.dex discord` or `.dex word`)
+      const { launchOsApp, launchSystemCommand } = await import('../core/osApps.js');
+      const osResult = await launchOsApp(cmdName);
+      if (osResult.success) {
+        console.log(`Launching OS App "${osResult.app.name}"...`);
+        return;
+      }
+
+      // Fallback 3: Try running it as a direct system command (e.g. `.dex notepad` or `.dex calc`)
+      const success = await launchSystemCommand(cmdName, cmdArgs);
+      if (success) {
+        return;
+      }
+
+      // If all fallbacks fail
+      console.error(`Command, Web App, or OS Program "${cmdName}" not recognized.`);
+      console.error(`Type ".dex help" to see available commands.`);
       process.exit(1);
     }
   }

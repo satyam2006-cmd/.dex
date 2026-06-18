@@ -27,6 +27,10 @@ function Write-Error ($text) {
 
 Write-Header "Installing .dex CLI"
 
+$DexVersion = "1.0.2"
+$RequiredNodeMajor = 18
+$PortableNodeVersion = "22.15.0"
+
 # 0. Fix PowerShell ExecutionPolicy if it's Restricted
 # Restricted policy blocks ALL .ps1 scripts (including PowerShell profiles and npm shims).
 # Setting it to RemoteSigned for CurrentUser allows local scripts to run while keeping
@@ -75,10 +79,21 @@ function Test-Winget {
 $PORTABLE_NODE_PATH = $null
 Refresh-Path
 $nodeVersion = $null
-try { $nodeVersion = node -v 2>$null } catch {}
+$nodeMajor = 0
+try {
+    $nodeVersion = node -v 2>$null
+    if ($nodeVersion) {
+        $nodeMajor = [int]($nodeVersion.TrimStart("v").Split(".")[0])
+    }
+} catch {}
 
-if (-not $nodeVersion) {
-    Write-Warn "Node.js is not installed. Attempting to install automatically..."
+if (-not $nodeVersion -or $nodeMajor -lt $RequiredNodeMajor) {
+    if ($nodeVersion) {
+        Write-Warn "Node.js $nodeVersion is installed, but .dex requires Node.js v$RequiredNodeMajor or newer."
+    } else {
+        Write-Warn "Node.js is not installed."
+    }
+    Write-Info "Attempting to install Node.js automatically..."
     
     $installed = $false
     
@@ -100,11 +115,11 @@ if (-not $nodeVersion) {
             $arch = "arm64"
         }
         
-        $nodeDirName = "node-v22.15.0-win-$arch"
-        $nodeUrl = "https://nodejs.org/dist/v22.15.0/$nodeDirName.zip"
+        $nodeDirName = "node-v$PortableNodeVersion-win-$arch"
+        $nodeUrl = "https://nodejs.org/dist/v$PortableNodeVersion/$nodeDirName.zip"
         
         if ($arch -eq "arm64") {
-            $nodeUrl = "https://nodejs.org/dist/v22.15.0/node-v22.15.0-win-arm64.zip"
+            $nodeUrl = "https://nodejs.org/dist/v$PortableNodeVersion/node-v$PortableNodeVersion-win-arm64.zip"
         }
         
         $nodeZip = Join-Path $env:TEMP "$nodeDirName.zip"
@@ -112,7 +127,7 @@ if (-not $nodeVersion) {
         $nodeExtractPath = Join-Path $nodeBinParent $nodeDirName
         
         try {
-            Write-Info "Downloading Node.js portable zip (v22.15.0)..."
+            Write-Info "Downloading Node.js portable zip (v$PortableNodeVersion)..."
             Invoke-WebRequest -Uri $nodeUrl -OutFile $nodeZip -UseBasicParsing
             
             Write-Info "Extracting Node.js..."
@@ -152,8 +167,13 @@ if (-not $nodeVersion) {
 
     if ($installed) {
         Refresh-Path
-        try { $nodeVersion = node -v 2>$null } catch {}
-        if (-not $nodeVersion) {
+        try {
+            $nodeVersion = node -v 2>$null
+            if ($nodeVersion) {
+                $nodeMajor = [int]($nodeVersion.TrimStart("v").Split(".")[0])
+            }
+        } catch {}
+        if (-not $nodeVersion -or $nodeMajor -lt $RequiredNodeMajor) {
             Write-Error "Node.js was installed but is not yet available in PATH."
             Write-Host "Please restart your terminal and re-run this script." -ForegroundColor Yellow
             exit 1
@@ -185,11 +205,10 @@ if (-not $npmVersion -and $npmCmd -eq "npm.cmd") {
 }
 
 if (-not $npmVersion) {
-    Write-Error "npm is not available despite Node.js being installed."
-    Write-Host "Please reinstall Node.js from https://nodejs.org/ (npm is bundled) and re-run this script." -ForegroundColor Yellow
-    exit 1
+    Write-Warn "npm is not available or its shim is broken. .dex has no third-party runtime dependencies, so the installer will use direct command wrappers."
+} else {
+    Write-Success "npm found: v$npmVersion"
 }
-Write-Success "npm found: v$npmVersion"
 
 if ($PORTABLE_NODE_PATH) {
     try {
@@ -327,21 +346,30 @@ try {
         [Environment]::SetEnvironmentVariable("Path", "$userPath;$npmBinDir", "User")
     }
 
-    # Run npm link
-    & $npmCmd link --force
-    if ($LASTEXITCODE -ne 0) {
-        throw "npm link failed with exit code $LASTEXITCODE"
-    }
-    
-    # On Windows, remove .ps1 shims and Unix extensionless files from npm directory.
-    # .ps1 shims are blocked by PowerShell's ExecutionPolicy on many systems (Restricted/AllSigned).
-    # The .cmd shims work universally regardless of ExecutionPolicy, so we keep only those.
-    $shimsToRemove = @(".dex", ".dex.ps1", "dex", "dex.ps1")
-    foreach ($shim in $shimsToRemove) {
-        $shimPath = Join-Path $npmBinDir $shim
-        if (Test-Path $shimPath) {
-            Remove-Item $shimPath -Force -ErrorAction SilentlyContinue
+    if ($npmVersion) {
+        Write-Info "Installing package dependencies..."
+        & $npmCmd install --omit=dev
+        if ($LASTEXITCODE -ne 0) {
+            throw "npm install failed with exit code $LASTEXITCODE"
         }
+
+        & $npmCmd link --force
+        if ($LASTEXITCODE -ne 0) {
+            throw "npm link failed with exit code $LASTEXITCODE"
+        }
+        
+        # On Windows, remove .ps1 shims and Unix extensionless files from npm directory.
+        # .ps1 shims are blocked by PowerShell's ExecutionPolicy on many systems (Restricted/AllSigned).
+        # The .cmd shims work universally regardless of ExecutionPolicy, so we keep only those.
+        $shimsToRemove = @(".dex", ".dex.ps1", "dex", "dex.ps1")
+        foreach ($shim in $shimsToRemove) {
+            $shimPath = Join-Path $npmBinDir $shim
+            if (Test-Path $shimPath) {
+                Remove-Item $shimPath -Force -ErrorAction SilentlyContinue
+            }
+        }
+    } else {
+        Write-Info "Skipping npm link and creating direct command wrappers."
     }
 } catch {
     Write-Error "Failed to link .dex CLI."
@@ -361,10 +389,14 @@ if ($env:OS -eq "Windows_NT") {
     # Create a .dex.cmd batch wrapper in the npm bin directory.
     # This ensures '.dex' works in both cmd.exe and PowerShell regardless of ExecutionPolicy.
     $npmBinDir = Join-Path $env:APPDATA "npm"
+    $entryPath = Join-Path $installDir "bin\dex.js"
+    $dexCmd = Join-Path $npmBinDir "dex.cmd"
     $dotDexCmd = Join-Path $npmBinDir ".dex.cmd"
-    $dexCmdContent = "@echo off`r`ndex.cmd %*"
-    Set-Content -Path $dotDexCmd -Value $dexCmdContent -Force
-    Write-Success "Created .dex.cmd wrapper in npm directory."
+    $dexCmdContent = "@echo off`r`nnode ""$entryPath"" %*"
+    $dotDexCmdContent = "@echo off`r`n""$dexCmd"" %*"
+    Set-Content -Path $dexCmd -Value $dexCmdContent -Encoding ASCII -Force
+    Set-Content -Path $dotDexCmd -Value $dotDexCmdContent -Encoding ASCII -Force
+    Write-Success "Created dex.cmd and .dex.cmd wrappers in npm directory."
     
     # Best-effort: Also add function to PowerShell profile for nicer PowerShell integration.
     # This may not work on Restricted ExecutionPolicy systems, but that's OK because
@@ -413,7 +445,7 @@ function .dex {
 Write-Host ""
 Write-Host "     .DEX CLI Setup Complete" -ForegroundColor Cyan
 Write-Host "     ------------------------" -ForegroundColor Cyan
-Write-Host "     Version: 1.0.1" -ForegroundColor Cyan
+Write-Host "     Version: $DexVersion" -ForegroundColor Cyan
 Write-Host "     Command: .dex" -ForegroundColor Cyan
 Write-Host ""
 

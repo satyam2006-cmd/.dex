@@ -1,91 +1,122 @@
 # .dex CLI
 
-Manage and launch standalone desktop web apps directly from your terminal, Windows Run dialog (Win + R), Start Menu, or scripts. 
+![.dex logo](logo.png)
 
-.dex turns your web bookmarks into native-feeling desktop applications with zero-lag startup and silent, background process management.
+.dex is a terminal-first workspace launcher for people who live across web apps, native apps, and browser sessions. Create standalone desktop web apps, group them into named workspaces, capture the state of a working session, and relaunch it from one command.
 
-![.dex CLI Banner](webpreview.png)
+![.dex CLI preview](webpreview.png)
 
----
+## Install
 
-## Installation
+The installers are one-shot scripts: they check for Node.js 18+, install or bootstrap Node when possible, fetch or update .dex, install package dependencies, and link the `dex` / `.dex` CLI globally.
 
-You can install .dex globally on any machine with a single terminal command. No manual cloning or configuration required.
+### Windows PowerShell
 
-### Windows (PowerShell)
-Run the following in PowerShell as Administrator or standard user:
 ```powershell
 irm https://raw.githubusercontent.com/satyam2006-cmd/.dex/master/install.ps1 | iex
 ```
 
-### macOS & Linux (Terminal)
-Run the following in your shell:
+### macOS and Linux
+
 ```bash
 curl -fsSL https://raw.githubusercontent.com/satyam2006-cmd/.dex/master/install.sh | bash
 ```
 
-Note: Restart your terminal after setup to refresh path variables.
+Restart your terminal after installation if your shell has not refreshed PATH yet.
 
----
-
-## Usage & Commands
+## Quick Start
 
 ```bash
-.dex <command> [arguments]
+.dex create https://github.com github -w coding
+.dex workspace add-os -w coding code
+.dex workspace launch -w coding
 ```
 
-### 1. Register a Desktop Web App
-Creates a wrapper desktop application from any URL.
+Run `.dex` with no arguments to open the interactive shell. Run `.dex --version` to verify the installed version.
+
+## CLI Commands
+
+### Apps
+
 ```bash
-.dex create https://github.com github
+.dex create <url> [name] [--icon <path_or_url>] [--hidden] [-w <workspace>]
+.dex launch <app...>
+.dex launch -os <native-app>
+.dex list [--all|--hidden]
+.dex search <query>
+.dex info <app>
+.dex update <app-id> [--url <url>] [--name <name>] [--hidden <true|false>] [--unlock] [--workspace <name,csv>]
+.dex remove <app>
 ```
-- --hidden: Disguise the shortcut using a system utility icon (e.g., Notepad, Calculator) to hide its true contents.
-- -w, --workspace <name>: Assign the app directly to a workspace.
 
-### 2. Launch App(s)
-Opens one or more registered applications in standalone windows.
+`create` turns a URL into a registered desktop app. On Windows it also creates desktop and Start Menu shortcuts, with optional custom icons and hidden/camouflaged shortcuts.
+
+### Workspaces
+
 ```bash
-.dex launch github chatgpt
+.dex workspace create -w <name>
+.dex workspace list
+.dex workspace add -w <name> <app>
+.dex workspace add-os -w <name> <native-app>
+.dex workspace launch -w <name>
+.dex workspace rename -w <old-name> <new-name>
+.dex workspace remove -w <name> <app>
+.dex workspace delete -w <name>
 ```
-- -w, --workspace <name>: Launch all applications assigned to a specific workspace at once.
 
-### 3. Start Menu & Search Integration (Windows Only)
-When you register an app via .dex, a shortcut is placed in:
-1. Your Desktop
-2. Your Windows Start Menu Programs folder
+Workspaces can contain .dex web apps, discovered native OS apps, and system commands. Launching a workspace starts the whole set together.
 
-This allows you to press the Win key, search for your custom app name (e.g., github), and launch it directly from Windows Search.
+### Snapshots and Browser Capture
 
-### 4. Manage Apps
-- List registered apps: .dex list (use --all to view hidden apps)
-- Search apps: .dex search <query>
-- Update metadata: .dex update <app-id> [--url <url>] [--name <name>] [--hidden <true|false>] [--workspace <ws>]
-- Delete app: .dex remove <app-name> (deletes configuration, desktop shortcuts, and Start Menu entries)
+```bash
+.dex capture install
+.dex capture status
+.dex capture <snapshot-name>
+.dex snapshot save <name>
+.dex snapshot restore <name>
+.dex workspace import -w <name> chrome
+```
 
-### 5. Analytics & Housekeeping
-- Recent launches: .dex recent
-- Analytics & usage statistics: .dex stats
-- Weekly launch graph summary: .dex summarize
-- Identify unused apps (30+ days): .dex suggest
-- Interactively purge unused apps: .dex clean
-- Database Backup/Restore: .dex export <file.json> and .dex import <file.json>
+The bundled browser extension can capture live tabs from Chromium browsers for accurate session snapshots. The fallback parser still works without the extension, but the extension is the clean path for active-tab capture.
 
----
+### Analytics and Backup
 
-## System Architecture & Technology
+```bash
+.dex recent
+.dex stats
+.dex summarize
+.dex suggest
+.dex clean
+.dex export <file.json>
+.dex import <file.json>
+```
 
-- Zero Third-Party Dependencies: Designed for maximum speed and security, using only native Node.js core modules.
-- Silent Launch System: Windows shortcuts launch apps completely silently in the background via wscript.exe and .vbs hooks, avoiding console window flickering.
-- Cross-Platform: Core CLI is fully compatible with Windows, macOS, and Linux.
+## What Changed in v1.0.2
 
----
+- Added the release-ready workspace flow for creating, listing, launching, renaming, and deleting workspaces.
+- Added native app and system command support inside workspaces.
+- Added snapshot and browser-tab capture commands with the bundled extension path.
+- Improved installer one-shot behavior on Windows, macOS, and Linux, including Node.js version checks and dependency install.
+- Centralized CLI version output and preserved custom icon metadata in the local database.
+- Improved cross-platform URL launching when Chrome or Edge are not found.
 
-## Roadmap (v2)
-- Web Dashboard: An interactive Local GUI to manage and track workspace analytics (.dex serve route preview).
-- Auto-Camouflage: System tray background management.
+## Data Location
 
----
+.dex stores its local database and history in:
+
+```text
+~/.dex/
+```
+
+The project itself installs to `~/.dex-cli` when using the remote installers.
+
+## Requirements
+
+- Node.js 18 or newer
+- npm
+- Git, curl, or wget for remote installation
+- Windows, macOS, or Linux
 
 ## License
 
-Licensed under the Apache License, Version 2.0 (the "License"). See the [LICENSE](LICENSE) file for details.
+Apache-2.0. See [LICENSE](LICENSE).
