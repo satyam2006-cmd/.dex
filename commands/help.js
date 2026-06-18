@@ -19,7 +19,7 @@ ${style.bold}Core Commands:${style.reset}
   ${style.green}clear / cls${style.reset}             Clear the terminal screen (REPL shell only)
   ${style.green}exit / quit${style.reset}             Exit the REPL shell (REPL shell only)
   ${style.green}launch <app-names...>${style.reset}   Launch specified registered app(s)
-    ${style.dim}-os, --os <name>         Launch an installed Windows app, e.g. launch -os vscode${style.reset}
+    ${style.dim}-os, --os <name>         Launch an installed native app, e.g. launch -os vscode${style.reset}
   ${style.green}create <url> [name]${style.reset}     Create a desktop app shortcut from a URL
     ${style.dim}--hidden                Camouflage the shortcut in Windows Explorer${style.reset}
     ${style.dim}--icon <path_or_url>    Provide a custom PNG, JPG, ICO, or download link${style.reset}

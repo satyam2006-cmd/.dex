@@ -1,12 +1,14 @@
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
-import { spawn, execSync } from 'child_process';
+import { spawn, execSync, execFileSync } from 'child_process';
+
+const PLATFORM = os.platform();
 
 function normalizeAppName(name) {
   return String(name || '')
     .toLowerCase()
-    .replace(/\.exe$/i, '')
+    .replace(/\.(exe|app|desktop)$/i, '')
     .replace(/[^a-z0-9]+/g, '');
 }
 
@@ -24,6 +26,11 @@ function queryAliases(query) {
 
   if (normalized === 'terminal' || normalized === 'wt') {
     aliases.add('windowsterminal');
+    aliases.add('terminal');
+    aliases.add('gnometerminal');
+    aliases.add('konsole');
+    aliases.add('xfce4terminal');
+    aliases.add('xterm');
   }
 
   return Array.from(aliases).filter(Boolean);
@@ -33,7 +40,23 @@ function commandFallbacks(query) {
   const normalized = normalizeAppName(query);
   if (['vscode', 'visualstudiocode', 'vs', 'code'].includes(normalized)) return [{ command: 'code', args: ['-n'] }];
   if (['vscodeinsiders', 'visualstudiocodeinsiders', 'codeinsiders'].includes(normalized)) return [{ command: 'code-insiders', args: ['-n'] }];
-  if (normalized === 'terminal' || normalized === 'windowsterminal' || normalized === 'wt') return [{ command: 'wt', args: [] }];
+  if (normalized === 'terminal' || normalized === 'windowsterminal' || normalized === 'wt') {
+    if (PLATFORM === 'win32') return [{ command: 'wt', args: [] }];
+    if (PLATFORM === 'darwin') return [{ command: 'open', args: ['-a', 'Terminal'] }];
+    return [
+      { command: 'x-terminal-emulator', args: [] },
+      { command: 'gnome-terminal', args: [] },
+      { command: 'konsole', args: [] },
+      { command: 'xfce4-terminal', args: [] },
+      { command: 'xterm', args: [] }
+    ];
+  }
+  if (PLATFORM === 'darwin') {
+    return [
+      { command: 'open', args: ['-a', query] },
+      { command: query, args: [] }
+    ];
+  }
   return [{ command: query, args: [] }];
 }
 
@@ -41,12 +64,24 @@ function executableFallbacks(query) {
   const normalized = normalizeAppName(query);
   const localAppData = process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData\\Local');
 
-  if (['vscode', 'visualstudiocode', 'vs', 'code'].includes(normalized)) {
-    return [{ path: path.join(localAppData, 'Programs\\Microsoft VS Code\\Code.exe'), args: '-n' }];
+  if (PLATFORM === 'win32') {
+    if (['vscode', 'visualstudiocode', 'vs', 'code'].includes(normalized)) {
+      return [{ path: path.join(localAppData, 'Programs\\Microsoft VS Code\\Code.exe'), args: '-n' }];
+    }
+
+    if (['vscodeinsiders', 'visualstudiocodeinsiders', 'codeinsiders'].includes(normalized)) {
+      return [{ path: path.join(localAppData, 'Programs\\Microsoft VS Code Insiders\\Code - Insiders.exe'), args: '-n' }];
+    }
   }
 
-  if (['vscodeinsiders', 'visualstudiocodeinsiders', 'codeinsiders'].includes(normalized)) {
-    return [{ path: path.join(localAppData, 'Programs\\Microsoft VS Code Insiders\\Code - Insiders.exe'), args: '-n' }];
+  if (PLATFORM === 'darwin') {
+    if (['vscode', 'visualstudiocode', 'vs', 'code'].includes(normalized)) {
+      return [{ path: '/Applications/Visual Studio Code.app', args: '' }];
+    }
+
+    if (['vscodeinsiders', 'visualstudiocodeinsiders', 'codeinsiders'].includes(normalized)) {
+      return [{ path: '/Applications/Visual Studio Code - Insiders.app', args: '' }];
+    }
   }
 
   return [];
@@ -54,6 +89,67 @@ function executableFallbacks(query) {
 
 function escapePowerShellSingleQuoted(value) {
   return String(value).replace(/'/g, "''");
+}
+
+function parseDesktopFile(desktopPath) {
+  try {
+    const content = fs.readFileSync(desktopPath, 'utf-8');
+    const entry = {};
+    for (const rawLine of content.split(/\r?\n/)) {
+      const line = rawLine.trim();
+      if (!line || line.startsWith('#') || !line.includes('=')) continue;
+      const idx = line.indexOf('=');
+      const key = line.slice(0, idx);
+      const value = line.slice(idx + 1);
+      if (key === 'Name' || key === 'Exec' || key === 'NoDisplay' || key === 'Hidden') {
+        entry[key] = value;
+      }
+    }
+    if (!entry.Name || !entry.Exec || entry.NoDisplay === 'true' || entry.Hidden === 'true') {
+      return null;
+    }
+    return entry;
+  } catch (_) {
+    return null;
+  }
+}
+
+function splitCommandLine(commandLine) {
+  const args = [];
+  let current = '';
+  let quote = null;
+
+  for (const char of String(commandLine || '')) {
+    if ((char === '"' || char === "'") && !quote) {
+      quote = char;
+    } else if (char === quote) {
+      quote = null;
+    } else if (/\s/.test(char) && !quote) {
+      if (current) {
+        args.push(current);
+        current = '';
+      }
+    } else {
+      current += char;
+    }
+  }
+
+  if (current) args.push(current);
+  return args;
+}
+
+function launchDesktopFile(desktopPath) {
+  const entry = parseDesktopFile(desktopPath);
+  if (!entry) return Promise.resolve(false);
+
+  const cleanedExec = entry.Exec
+    .replace(/%[fFuUdDnNickvm]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const [command, ...args] = splitCommandLine(cleanedExec);
+  if (!command) return Promise.resolve(false);
+
+  return launchSystemCommand(command, args);
 }
 
 function getShortcutInfo(shortcutPath) {
@@ -117,11 +213,78 @@ function walkShortcuts(dir, appsMap = {}) {
   return appsMap;
 }
 
+function walkMacApps(dir, appsMap = {}) {
+  if (!fs.existsSync(dir)) return appsMap;
+  try {
+    const items = fs.readdirSync(dir, { withFileTypes: true });
+    for (const item of items) {
+      const fullPath = path.join(dir, item.name);
+      if (item.isDirectory() && item.name.endsWith('.app')) {
+        const appName = path.basename(item.name, '.app');
+        const key = appName.toLowerCase();
+        appsMap[key] = { name: appName, path: fullPath, type: 'app' };
+      } else if (item.isDirectory()) {
+        walkMacApps(fullPath, appsMap);
+      }
+    }
+  } catch (_) {}
+  return appsMap;
+}
+
+function walkDesktopFiles(dir, appsMap = {}) {
+  if (!fs.existsSync(dir)) return appsMap;
+  try {
+    const items = fs.readdirSync(dir, { withFileTypes: true });
+    for (const item of items) {
+      const fullPath = path.join(dir, item.name);
+      if (item.isDirectory()) {
+        walkDesktopFiles(fullPath, appsMap);
+      } else if (item.isFile() && item.name.endsWith('.desktop')) {
+        const entry = parseDesktopFile(fullPath);
+        if (!entry) continue;
+        const key = entry.Name.toLowerCase();
+        if (!appsMap[key] || fullPath.startsWith(os.homedir())) {
+          appsMap[key] = {
+            name: entry.Name,
+            path: fullPath,
+            type: 'desktop',
+            exec: entry.Exec
+          };
+        }
+      }
+    }
+  } catch (_) {}
+  return appsMap;
+}
+
 /**
- * Scans Windows Start Menu locations to return a map of installed native OS apps.
+ * Scans native app locations for the current OS and returns a map of installed apps.
  */
 export function scanOsApps() {
   const appsMap = {};
+
+  if (PLATFORM === 'darwin') {
+    [
+      '/Applications',
+      '/System/Applications',
+      '/System/Applications/Utilities',
+      path.join(os.homedir(), 'Applications')
+    ].forEach(dir => walkMacApps(dir, appsMap));
+    return appsMap;
+  }
+
+  if (PLATFORM === 'linux') {
+    [
+      path.join(os.homedir(), '.local/share/applications'),
+      '/usr/local/share/applications',
+      '/usr/share/applications',
+      '/var/lib/flatpak/exports/share/applications',
+      path.join(os.homedir(), '.local/share/flatpak/exports/share/applications'),
+      '/var/lib/snapd/desktop/applications'
+    ].forEach(dir => walkDesktopFiles(dir, appsMap));
+    return appsMap;
+  }
+
   const startMenuPaths = [
     path.join(process.env.PROGRAMDATA || 'C:\\ProgramData', 'Microsoft\\Windows\\Start Menu\\Programs'),
     path.join(os.homedir(), 'AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs')
@@ -132,12 +295,20 @@ export function scanOsApps() {
 }
 
 /**
- * Launches a Windows path detached in the background using PowerShell.
+ * Launches an app, shortcut, .desktop file, or executable path detached in the background.
  */
-export function launchPath(filePath) {
+export function launchPath(filePath, args = '') {
   if (!filePath) return Promise.resolve(false);
 
-  if (filePath.toLowerCase().endsWith('.lnk')) {
+  if (PLATFORM === 'darwin' && filePath.toLowerCase().endsWith('.app')) {
+    return launchSystemCommand('open', ['-n', filePath]);
+  }
+
+  if (PLATFORM === 'linux' && filePath.toLowerCase().endsWith('.desktop')) {
+    return launchDesktopFile(filePath);
+  }
+
+  if (PLATFORM === 'win32' && filePath.toLowerCase().endsWith('.lnk')) {
     const shortcut = getShortcutInfo(filePath);
     if (!shortcut?.TargetPath || !fs.existsSync(shortcut.TargetPath)) {
       return Promise.resolve(false);
@@ -149,7 +320,15 @@ export function launchPath(filePath) {
     return Promise.resolve(false);
   }
 
-  return startPowerShellProcess(filePath);
+  if (PLATFORM === 'win32') {
+    return startPowerShellProcess(filePath, args);
+  }
+
+  if (path.isAbsolute(filePath)) {
+    return launchSystemCommand(filePath);
+  }
+
+  return launchSystemCommand(filePath);
 }
 
 /**
@@ -212,7 +391,7 @@ export async function launchOsApp(query) {
 
   for (const executable of executableFallbacks(query)) {
     if (fs.existsSync(executable.path)) {
-      const success = await startPowerShellProcess(executable.path, executable.args);
+      const success = await launchPath(executable.path, executable.args);
       if (success) {
         return {
           app: { name: query, path: executable.path },
@@ -254,6 +433,38 @@ export async function launchCapturedApp(app) {
  */
 export function getRunningGuiApps() {
   try {
+    if (PLATFORM === 'darwin') {
+      const script = `tell application "System Events" to get the name of every process whose background only is false`;
+      const output = execFileSync('osascript', ['-e', script], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+      if (!output) return [];
+      const excludeList = ['finder', 'google chrome', 'microsoft edge', 'brave browser', 'opera', 'firefox'];
+      return output
+        .split(/\s*,\s*/)
+        .filter(Boolean)
+        .filter(name => !excludeList.includes(name.toLowerCase()))
+        .map(name => ({ name, path: null, launchName: name }));
+    }
+
+    if (PLATFORM === 'linux') {
+      let output = '';
+      try {
+        output = execSync('wmctrl -lx', { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+      } catch (_) {
+        return [];
+      }
+      const excludeList = ['chrome', 'chromium', 'firefox', 'brave', 'opera', 'msedge'];
+      const seen = new Map();
+      output.split(/\r?\n/).forEach(line => {
+        const parts = line.trim().split(/\s+/);
+        const wmClass = parts[2] || '';
+        const appName = wmClass.split('.').pop() || wmClass;
+        if (appName && !excludeList.includes(appName.toLowerCase())) {
+          seen.set(appName.toLowerCase(), { name: appName, path: null, launchName: appName });
+        }
+      });
+      return Array.from(seen.values());
+    }
+
     const psCmd = `Get-Process | Where-Object MainWindowTitle | Select-Object Name, Path | ConvertTo-Json`;
     const output = execSync(`powershell -NoProfile -Command "${psCmd}"`, { encoding: 'utf8' }).trim();
     if (!output) return [];
@@ -285,6 +496,10 @@ export function getRunningGuiApps() {
  */
 export function getRunningVsCodeFolders() {
   try {
+    if (PLATFORM !== 'win32') {
+      return [];
+    }
+
     const psCmd = `$ErrorActionPreference='SilentlyContinue'; Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { $_.Name -in @('Code.exe','Code - Insiders.exe','VSCodium.exe') } | Select-Object CommandLine | ConvertTo-Json`;
     const output = execSync(`powershell -NoProfile -Command "${psCmd}"`, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
     if (!output) return [];

@@ -64,6 +64,8 @@ Run `.dex` with no arguments to open the interactive shell. Run `.dex --version`
 
 Workspaces can contain .dex web apps, discovered native OS apps, and system commands. Launching a workspace starts the whole set together.
 
+Native app discovery supports Windows Start Menu shortcuts, macOS `.app` bundles, and Linux `.desktop` launchers. If an app is not discoverable, `.dex` still tries command fallbacks such as `code`, `open -a <app>` on macOS, or common Linux terminal launchers.
+
 ### Snapshots and Browser Capture
 
 ```bash
