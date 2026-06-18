@@ -43,7 +43,7 @@ export default {
         await this.handleLaunch(subArgs);
         break;
       case 'snapshot':
-        await this.handleSnapshot(subArgs);
+        await this.handleSnapshot(subArgs, context);
         break;
       case 'import':
         await this.handleImport(subArgs, context);
@@ -318,7 +318,52 @@ ${style.bold}Workspace Usage:${style.reset}
     await launchCmd.execute(['--workspace', ws.name]);
   },
 
-  async handleSnapshot(subArgs) {
+  isTerminalApp(app) {
+    const value = `${app?.name || ''} ${app?.path || ''} ${app?.launchName || ''}`.toLowerCase();
+    return [
+      'windowsterminal',
+      'windows terminal',
+      'terminal.exe',
+      'wt.exe',
+      'powershell.exe',
+      'pwsh.exe',
+      'cmd.exe',
+      'conhost.exe',
+      'openconsole.exe'
+    ].some(term => value.includes(term));
+  },
+
+  async askYesNo(question, context = {}) {
+    if (context.rl) {
+      const answer = await context.rl.question(question);
+      return ['y', 'yes'].includes(answer.trim().toLowerCase());
+    }
+
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+    try {
+      const answer = await rl.question(question);
+      return ['y', 'yes'].includes(answer.trim().toLowerCase());
+    } finally {
+      rl.close();
+    }
+  },
+
+  async filterTerminalApps(osApps, context = {}) {
+    const terminalApps = osApps.filter(app => this.isTerminalApp(app));
+    if (terminalApps.length === 0) return osApps;
+
+    const terminalNames = terminalApps.map(app => app.name).join(', ');
+    console.log(`${style.yellow}Note: terminal detected by snapshot capture: ${terminalNames}.${style.reset}`);
+    const keepTerminals = await this.askYesNo('Do you want to keep terminal window(s) in this workspace snapshot? (y/N): ', context);
+
+    if (keepTerminals) {
+      return osApps;
+    }
+
+    return osApps.filter(app => !this.isTerminalApp(app));
+  },
+
+  async handleSnapshot(subArgs, context = {}) {
     if (subArgs.length === 0) {
       console.log(`${style.red}Error: Please specify snapshot action ('save' or 'restore').${style.reset}`);
       console.log(`Usage: workspace snapshot [save|restore] -w <workspace>`);
@@ -348,7 +393,7 @@ ${style.bold}Workspace Usage:${style.reset}
       }
       
       const ideFolders = getRunningVsCodeFolders();
-      const osApps = getRunningGuiApps();
+      const osApps = await this.filterTerminalApps(getRunningGuiApps(), context);
 
       const db = readDb();
       db.workspaces[currentWs.id].snapshot = {

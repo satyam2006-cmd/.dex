@@ -4,6 +4,8 @@ import { getRunningGuiApps, launchCapturedApp } from '../core/osApps.js';
 import { launchUrl } from '../core/launcher.js';
 import { getCaptureExtensionPath, requestBrowserTabs } from '../core/tabCaptureBridge.js';
 import { style, tick } from './utils.js';
+import readline from 'readline/promises';
+import { stdin as input, stdout as output } from 'process';
 
 function parseSnapshotArgs(args) {
   const action = args[0]?.toLowerCase();
@@ -65,7 +67,52 @@ async function captureBrowserTabs(extensionOnly = false) {
   };
 }
 
-async function saveSnapshot(name, options = {}) {
+function isTerminalApp(app) {
+  const value = `${app?.name || ''} ${app?.path || ''} ${app?.launchName || ''}`.toLowerCase();
+  return [
+    'windowsterminal',
+    'windows terminal',
+    'terminal.exe',
+    'wt.exe',
+    'powershell.exe',
+    'pwsh.exe',
+    'cmd.exe',
+    'conhost.exe',
+    'openconsole.exe'
+  ].some(term => value.includes(term));
+}
+
+async function askYesNo(question, context = {}) {
+  if (context.rl) {
+    const answer = await context.rl.question(question);
+    return ['y', 'yes'].includes(answer.trim().toLowerCase());
+  }
+
+  const rl = readline.createInterface({ input, output });
+  try {
+    const answer = await rl.question(question);
+    return ['y', 'yes'].includes(answer.trim().toLowerCase());
+  } finally {
+    rl.close();
+  }
+}
+
+async function filterTerminalApps(osApps, context = {}) {
+  const terminalApps = osApps.filter(isTerminalApp);
+  if (terminalApps.length === 0) return osApps;
+
+  const terminalNames = terminalApps.map(app => app.name).join(', ');
+  console.log(`${style.yellow}Note: terminal detected by snapshot capture: ${terminalNames}.${style.reset}`);
+  const keepTerminals = await askYesNo('Do you want to keep terminal window(s) in this workspace snapshot? (y/N): ', context);
+
+  if (keepTerminals) {
+    return osApps;
+  }
+
+  return osApps.filter(app => !isTerminalApp(app));
+}
+
+async function saveSnapshot(name, options = {}, context = {}) {
   let ws = getWorkspace(name);
   if (!ws) {
     ws = addWorkspace(name, []);
@@ -73,7 +120,7 @@ async function saveSnapshot(name, options = {}) {
   }
 
   const { tabs, tabDetails, warnings } = await captureBrowserTabs(options.extensionOnly);
-  const osApps = getRunningGuiApps();
+  const osApps = await filterTerminalApps(getRunningGuiApps(), context);
 
   const db = readDb();
   db.workspaces[ws.id].snapshot = {
@@ -134,7 +181,7 @@ async function restoreSnapshot(name) {
 export default {
   name: 'snapshot',
   description: 'Save and restore named workspace snapshots',
-  async execute(args) {
+  async execute(args, context = {}) {
     const { action, name, extensionOnly } = parseSnapshotArgs(args);
 
     if (!action || (action !== 'save' && action !== 'restore')) {
@@ -150,7 +197,7 @@ export default {
     }
 
     if (action === 'save') {
-      await saveSnapshot(name, { extensionOnly });
+      await saveSnapshot(name, { extensionOnly }, context);
     } else {
       await restoreSnapshot(name);
     }

@@ -285,8 +285,8 @@ export function getRunningGuiApps() {
  */
 export function getRunningVsCodeFolders() {
   try {
-    const psCmd = `Get-CimInstance Win32_Process | Where-Object { $_.Name -in @('Code.exe','Code - Insiders.exe','VSCodium.exe') } | Select-Object CommandLine | ConvertTo-Json`;
-    const output = execSync(`powershell -NoProfile -Command "${psCmd}"`, { encoding: 'utf8' }).trim();
+    const psCmd = `$ErrorActionPreference='SilentlyContinue'; Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { $_.Name -in @('Code.exe','Code - Insiders.exe','VSCodium.exe') } | Select-Object CommandLine | ConvertTo-Json`;
+    const output = execSync(`powershell -NoProfile -Command "${psCmd}"`, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
     if (!output) return [];
 
     let parsed = JSON.parse(output);
