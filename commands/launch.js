@@ -22,17 +22,18 @@ export default {
         return;
       }
 
-      const { launchOsApp, resolveOsApp } = await import('../core/osApps.js');
+      const { findLaunchCandidate, launch } = await import('../core/searchEngine.js');
       const joinedName = osNames.join(' ');
-      if (osNames.length > 1 && resolveOsApp(joinedName)) {
+      if (osNames.length > 1) {
         osNames = [joinedName];
       }
 
       console.log(`Launching ${osNames.length} OS app${osNames.length !== 1 ? 's' : ''}...`);
       for (const name of osNames) {
-        const result = await launchOsApp(name);
-        if (result.success) {
-          console.log(` ${tick} ${result.app?.name || name}`);
+        const { exact, results } = await findLaunchCandidate(name, { limit: 5 });
+        const result = exact || results.find(item => item.type === 'os-app') || results[0];
+        if (result && result.type === 'os-app' && await launch(result)) {
+          console.log(` ${tick} ${result.name}`);
         } else {
           console.log(` ${cross} ${name} (OS app not found)`);
         }
@@ -71,15 +72,14 @@ export default {
         if (app) {
           appsToLaunch.push(app);
         } else {
-          // Check if it's a scanned OS app
-          const { resolveOsApp } = await import('../core/osApps.js');
-          const osApp = resolveOsApp(name);
-          if (osApp) {
+          const { findLaunchCandidate } = await import('../core/searchEngine.js');
+          const { exact } = await findLaunchCandidate(name, { limit: 3 });
+          if (exact) {
             appsToLaunch.push({
-              id: name.toLowerCase(),
-              name: osApp.name,
-              type: 'os',
-              path: osApp.path
+              id: exact.id,
+              name: exact.name,
+              type: 'search',
+              result: exact
             });
           } else {
             // Fallback: treat as raw system command
@@ -103,6 +103,9 @@ export default {
       if (app.type === 'os') {
         const { launchPath } = await import('../core/osApps.js');
         success = await launchPath(app.path);
+      } else if (app.type === 'search') {
+        const { launch } = await import('../core/searchEngine.js');
+        success = await launch(app.result);
       } else if (app.type === 'system') {
         const { launchSystemCommand } = await import('../core/osApps.js');
         success = await launchSystemCommand(app.name);
@@ -125,6 +128,9 @@ export default {
         if (app.type === 'os') {
           const { launchPath } = await import('../core/osApps.js');
           success = await launchPath(app.path);
+        } else if (app.type === 'search') {
+          const { launch } = await import('../core/searchEngine.js');
+          success = await launch(app.result);
         } else if (app.type === 'system') {
           const { launchSystemCommand } = await import('../core/osApps.js');
           success = await launchSystemCommand(app.name);

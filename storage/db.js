@@ -10,6 +10,7 @@ const INITIAL_DB = {
   version: VERSION,
   apps: {},
   workspaces: {},
+  profiles: {},
   launches_log: []
 };
 
@@ -38,6 +39,7 @@ export function readDb(forceRefresh = false) {
     if (!cachedDb) cachedDb = { ...INITIAL_DB };
     if (!cachedDb.apps) cachedDb.apps = {};
     if (!cachedDb.workspaces) cachedDb.workspaces = {};
+    if (!cachedDb.profiles) cachedDb.profiles = {};
     if (!cachedDb.launches_log) cachedDb.launches_log = [];
     if (!cachedDb.version) cachedDb.version = VERSION;
     return cachedDb;
@@ -190,6 +192,95 @@ export function getWorkspace(id) {
   return db.workspaces[id.toLowerCase()] || null;
 }
 
+// --- Profile Operations ---
+
+export function getProfiles() {
+  const db = readDb();
+  return db.profiles || {};
+}
+
+export function getProfile(id) {
+  if (!id || typeof id !== 'string') return null;
+  const db = readDb();
+  const key = id.toLowerCase().replace(/^--/, '');
+  return db.profiles?.[key] || null;
+}
+
+export function addProfile(name, fields = {}) {
+  const db = readDb();
+  if (!db.profiles) db.profiles = {};
+  const displayName = String(name || '').replace(/^--/, '').trim();
+  const id = displayName.toLowerCase();
+  if (!id) return null;
+  const existing = db.profiles[id] || {};
+
+  db.profiles[id] = {
+    id,
+    name: fields.name || existing.name || displayName,
+    workspaces: fields.workspaces || existing.workspaces || [],
+    workflows: fields.workflows || existing.workflows || [],
+    created: existing.created || new Date().toISOString(),
+    lastOpened: existing.lastOpened || null,
+    launches: existing.launches || 0
+  };
+
+  writeDb(db);
+  return db.profiles[id];
+}
+
+export function updateProfile(id, fields = {}) {
+  const db = readDb();
+  if (!db.profiles) db.profiles = {};
+  const key = String(id || '').toLowerCase().replace(/^--/, '');
+  if (!db.profiles[key]) return null;
+  db.profiles[key] = {
+    ...db.profiles[key],
+    ...fields,
+    id: key,
+    workspaces: Array.isArray(fields.workspaces) ? fields.workspaces : db.profiles[key].workspaces || [],
+    workflows: Array.isArray(fields.workflows) ? fields.workflows : db.profiles[key].workflows || []
+  };
+  writeDb(db);
+  return db.profiles[key];
+}
+
+export function renameProfile(id, newName) {
+  const db = readDb();
+  if (!db.profiles) db.profiles = {};
+  const oldKey = String(id || '').toLowerCase().replace(/^--/, '');
+  const displayName = String(newName || '').replace(/^--/, '').trim();
+  const newKey = displayName.toLowerCase();
+  if (!oldKey || !newKey || !db.profiles[oldKey] || db.profiles[newKey]) return null;
+
+  db.profiles[newKey] = {
+    ...db.profiles[oldKey],
+    id: newKey,
+    name: displayName
+  };
+  delete db.profiles[oldKey];
+  writeDb(db);
+  return db.profiles[newKey];
+}
+
+export function deleteProfile(id) {
+  const db = readDb();
+  const key = String(id || '').toLowerCase().replace(/^--/, '');
+  if (!db.profiles?.[key]) return false;
+  delete db.profiles[key];
+  writeDb(db);
+  return true;
+}
+
+export function logProfileLaunch(id) {
+  const db = readDb();
+  const key = id.toLowerCase().replace(/^--/, '');
+  if (!db.profiles?.[key]) return false;
+  db.profiles[key].lastOpened = new Date().toISOString();
+  db.profiles[key].launches += 1;
+  writeDb(db);
+  return db.profiles[key];
+}
+
 export function addWorkspace(name, appIds = []) {
   const db = readDb();
   const id = name.toLowerCase();
@@ -205,6 +296,7 @@ export function addWorkspace(name, appIds = []) {
   // Update workspace lists in apps
   Object.keys(db.apps).forEach(appKey => {
     const app = db.apps[appKey];
+    if (!Array.isArray(app.workspaces)) app.workspaces = [];
     if (db.workspaces[id].apps.includes(appKey)) {
       if (!app.workspaces.includes(id)) {
         app.workspaces.push(id);

@@ -335,23 +335,30 @@ export async function startRepl() {
       if (cmd) {
         await cmd.execute(cmdArgs, { rl, isInteractiveShell: true });
       } else {
-        // Fallback 1: Check if it's a registered DEX web app (e.g. `github`)
-        const app = getApps().find(a => a.id === cmdName.toLowerCase() || a.name.toLowerCase() === cmdName.toLowerCase());
-        if (app) {
-          const launchCmd = getCommand('launch');
-          await launchCmd.execute([app.id], { rl, isInteractiveShell: true });
-        } else {
-          // Fallback 2: Check if it's a scanned OS application (e.g. `discord` or `spotify`)
-          const { launchOsApp, launchSystemCommand } = await import('../core/osApps.js');
-          const osResult = await launchOsApp(cmdName);
-          if (osResult.success) {
-            console.log(`Launching OS App "${osResult.app.name}"...`);
+        const query = parts.join(' ');
+        const { findLaunchCandidate, interactiveSelect, launch, printResults } = await import('../core/searchEngine.js');
+        const { exact, results } = await findLaunchCandidate(query);
+        if (exact) {
+          console.log(`Launching ${exact.name}...`);
+          const success = await launch(exact);
+          if (!success) {
+            console.log(`${style.red}Failed to launch "${exact.name}".${style.reset}`);
+          }
+        } else if (results.length > 0) {
+          printResults(results.slice(0, 4));
+          const selected = await interactiveSelect(query, { message: 'Select app' });
+          if (selected) {
+            console.log(`Launching ${selected.name}...`);
+            await launch(selected);
           } else {
-            const success = await launchSystemCommand(cmdName, cmdArgs);
-            if (!success) {
-              console.log(`${style.red}Command, Web App, or OS Program "${cmdName}" not recognized.${style.reset}`);
-              console.log(`Type ${style.bold}help${style.reset} to see available commands.`);
-            }
+            console.log('Cancelled.');
+          }
+        } else {
+          const { launchSystemCommand } = await import('../core/osApps.js');
+          const success = await launchSystemCommand(cmdName, cmdArgs);
+          if (!success) {
+            console.log(`${style.red}Command, Web App, Workspace, Snapshot, Profile, or OS Program "${query}" not recognized.${style.reset}`);
+            console.log(`Type ${style.bold}help${style.reset} to see available commands.`);
           }
         }
       }

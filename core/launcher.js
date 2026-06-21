@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { spawn, exec } from 'child_process';
+import { spawn } from 'child_process';
 import os from 'os';
 
 // Dynamic path resolution on Windows
@@ -42,26 +42,34 @@ export function launchUrl(url, preferredBrowser = 'auto') {
     browserPath = browsers.chrome || browsers.edge;
   }
 
-  // If no specific Chromium binary was found in standard paths, attempt to spawn by command
+  // If no specific Chromium binary was found in standard paths, open the default browser directly.
   if (!browserPath) {
     return new Promise((resolve) => {
       const platform = os.platform();
-      let command;
+      let child;
       if (platform === 'win32') {
-        command = `start "" "${url}"`;
+        child = spawn('cmd.exe', ['/c', 'start', '', url], {
+          detached: true,
+          stdio: 'ignore',
+          windowsHide: true
+        });
       } else if (platform === 'darwin') {
-        command = `open "${url.replace(/"/g, '\\"')}"`;
+        child = spawn('open', [url], {
+          detached: true,
+          stdio: 'ignore'
+        });
       } else {
-        command = `xdg-open "${url.replace(/"/g, '\\"')}"`;
+        child = spawn('xdg-open', [url], {
+          detached: true,
+          stdio: 'ignore'
+        });
       }
-      exec(command, (err) => {
-        if (err) {
-          console.error('Failed to open default browser via shell:', err.message || err);
-          resolve(false);
-        } else {
-          resolve(true);
-        }
+      child.on('error', err => {
+        console.error('Failed to open default browser:', err.message || err);
+        resolve(false);
       });
+      child.unref();
+      resolve(true);
     });
   }
 
@@ -72,7 +80,8 @@ export function launchUrl(url, preferredBrowser = 'auto') {
     // Spawn the browser as a detached background process
     const child = spawn(browserPath, args, {
       detached: true,
-      stdio: 'ignore'
+      stdio: 'ignore',
+      windowsHide: true
     });
     
     child.unref();

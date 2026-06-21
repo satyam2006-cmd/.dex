@@ -156,7 +156,7 @@ function getShortcutInfo(shortcutPath) {
   try {
     const escapedPath = escapePowerShellSingleQuoted(shortcutPath);
     const command = `$w=New-Object -ComObject WScript.Shell; $s=$w.CreateShortcut('${escapedPath}'); [pscustomobject]@{TargetPath=$s.TargetPath; Arguments=$s.Arguments; WorkingDirectory=$s.WorkingDirectory} | ConvertTo-Json -Compress`;
-    const output = execSync(`powershell -NoProfile -Command "${command}"`, { encoding: 'utf8' }).trim();
+    const output = execSync(`powershell -NoProfile -Command "${command}"`, { encoding: 'utf8', windowsHide: true }).trim();
     return output ? JSON.parse(output) : null;
   } catch (_) {
     return null;
@@ -178,7 +178,8 @@ function startPowerShellProcess(filePath, args = '', workingDirectory = '') {
     }
 
     const ps = spawn('powershell', ['-NoProfile', '-Command', command], {
-      stdio: 'ignore'
+      stdio: 'ignore',
+      windowsHide: true
     });
 
     ps.on('error', () => resolve(false));
@@ -466,7 +467,7 @@ export function getRunningGuiApps() {
     }
 
     const psCmd = `Get-Process | Where-Object MainWindowTitle | Select-Object Name, Path | ConvertTo-Json`;
-    const output = execSync(`powershell -NoProfile -Command "${psCmd}"`, { encoding: 'utf8' }).trim();
+    const output = execSync(`powershell -NoProfile -Command "${psCmd}"`, { encoding: 'utf8', windowsHide: true }).trim();
     if (!output) return [];
 
     let parsed = JSON.parse(output);
@@ -501,7 +502,7 @@ export function getRunningVsCodeFolders() {
     }
 
     const psCmd = `$ErrorActionPreference='SilentlyContinue'; Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { $_.Name -in @('Code.exe','Code - Insiders.exe','VSCodium.exe') } | Select-Object CommandLine | ConvertTo-Json`;
-    const output = execSync(`powershell -NoProfile -Command "${psCmd}"`, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+    const output = execSync(`powershell -NoProfile -Command "${psCmd}"`, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true }).trim();
     if (!output) return [];
 
     let parsed = JSON.parse(output);

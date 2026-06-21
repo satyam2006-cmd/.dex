@@ -106,7 +106,7 @@ export function createDesktopShortcut(appName, appId, isHidden = false, customIc
       return reject(err);
     }
     
-    exec(`powershell -NoProfile -ExecutionPolicy Bypass -File "${tempScriptPath}"`, (err) => {
+    exec(`powershell -NoProfile -ExecutionPolicy Bypass -File "${tempScriptPath}"`, { windowsHide: true }, (err) => {
       try {
         if (fs.existsSync(tempScriptPath)) {
           fs.unlinkSync(tempScriptPath);
@@ -120,10 +120,10 @@ export function createDesktopShortcut(appName, appId, isHidden = false, customIc
       } else {
         if (isHidden) {
           try {
-            execSync(`attrib +h "${desktopShortcutPath}"`);
+            execSync(`attrib +h "${desktopShortcutPath}"`, { windowsHide: true });
           } catch (_) {}
           try {
-            execSync(`attrib +h "${startMenuShortcutPath}"`);
+            execSync(`attrib +h "${startMenuShortcutPath}"`, { windowsHide: true });
           } catch (_) {}
         }
         resolve(desktopShortcutPath);
@@ -141,13 +141,13 @@ export function unlockDesktopShortcut(appName) {
   
   try {
     if (fs.existsSync(desktopShortcutPath)) {
-      execSync(`attrib -h "${desktopShortcutPath}"`);
+      execSync(`attrib -h "${desktopShortcutPath}"`, { windowsHide: true });
     }
   } catch (_) {}
   
   try {
     if (fs.existsSync(startMenuShortcutPath)) {
-      execSync(`attrib -h "${startMenuShortcutPath}"`);
+      execSync(`attrib -h "${startMenuShortcutPath}"`, { windowsHide: true });
     }
   } catch (_) {}
 }
@@ -164,12 +164,12 @@ export function removeDesktopShortcut(appName) {
   // Try to remove hidden attribute first to ensure we can delete it
   try {
     if (fs.existsSync(desktopShortcutPath)) {
-      execSync(`attrib -h "${desktopShortcutPath}"`);
+      execSync(`attrib -h "${desktopShortcutPath}"`, { windowsHide: true });
     }
   } catch (_) {}
   try {
     if (fs.existsSync(startMenuShortcutPath)) {
-      execSync(`attrib -h "${startMenuShortcutPath}"`);
+      execSync(`attrib -h "${startMenuShortcutPath}"`, { windowsHide: true });
     }
   } catch (_) {}
 

@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 
 import { executeCommand, getCommand } from '../commands/index.js';
-import { getApps } from '../storage/db.js';
 import { VERSION } from '../core/version.js';
 
 async function main() {
@@ -43,35 +42,38 @@ async function main() {
       process.exit(1);
     }
   } else {
-    // Fallback 1: Check if it's a registered DEX web app (e.g. `.dex github`)
-    const app = getApps().find(
-      a => a.id === cmdName.toLowerCase() || a.name.toLowerCase() === cmdName.toLowerCase()
-    );
-    if (app) {
-      try {
-        await executeCommand('launch', [app.id]);
-      } catch (err) {
-        console.error(`Error:`, err.message || err);
-        process.exit(1);
-      }
-    } else {
-      // Fallback 2: Check if it's a scanned OS application (e.g. `.dex discord` or `.dex word`)
-      const { launchOsApp, launchSystemCommand } = await import('../core/osApps.js');
-      const osResult = await launchOsApp(cmdName);
-      if (osResult.success) {
-        console.log(`Launching OS App "${osResult.app.name}"...`);
-        return;
+    const query = [cmdName, ...cmdArgs].join(' ');
+    const { findLaunchCandidate, interactiveSelect, launch, printResults } = await import('../core/searchEngine.js');
+    const { exact, results } = await findLaunchCandidate(query);
+
+    try {
+      if (exact) {
+        console.log(`Launching ${exact.name}...`);
+        const success = await launch(exact);
+        if (success) return;
+      } else if (results.length > 0 && process.stdin.isTTY && process.stdout.isTTY) {
+        printResults(results.slice(0, 4));
+        const selected = await interactiveSelect(query, { message: 'Select app' });
+        if (selected) {
+          console.log(`Launching ${selected.name}...`);
+          const success = await launch(selected);
+          if (success) return;
+        } else {
+          console.log('Cancelled.');
+          return;
+        }
       }
 
-      // Fallback 3: Try running it as a direct system command (e.g. `.dex notepad` or `.dex calc`)
+      // Final fallback: direct system command, preserving old behavior for tools like `.dex calc`.
+      const { launchSystemCommand } = await import('../core/osApps.js');
       const success = await launchSystemCommand(cmdName, cmdArgs);
-      if (success) {
-        return;
-      }
+      if (success) return;
 
-      // If all fallbacks fail
-      console.error(`Command, Web App, or OS Program "${cmdName}" not recognized.`);
+      console.error(`Command, Web App, Workspace, Snapshot, Profile, or OS Program "${query}" not recognized.`);
       console.error(`Type ".dex help" to see available commands.`);
+      process.exit(1);
+    } catch (err) {
+      console.error(`Error:`, err.message || err);
       process.exit(1);
     }
   }

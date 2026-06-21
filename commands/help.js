@@ -33,7 +33,9 @@ ${style.bold}Core Commands:${style.reset}
   ${style.green}list${style.reset}                    List all registered apps
     ${style.dim}--all, -a               Show all apps including hidden ones${style.reset}
     ${style.dim}--hidden                Show only hidden/camouflaged apps${style.reset}
-  ${style.green}search <query>${style.reset}            Search registered apps by name
+  ${style.green}search [query]${style.reset}            Fuzzy search apps, workspaces, snapshots, profiles, and commands
+    ${style.dim}--launch, -l             Launch the best result${style.reset}
+    ${style.dim}--refresh                Rebuild the search index${style.reset}
   ${style.green}remove <app-name>${style.reset}         Delete app metadata and its desktop shortcut
   ${style.green}info <app-name>${style.reset}           Show detailed information about an app
 
@@ -54,6 +56,16 @@ ${style.bold}Workspaces & Productivity:${style.reset}
     ${style.dim}snapshot save -w <name>     Save current open browser tabs and VS Code folders${style.reset}
     ${style.dim}snapshot restore -w <name>  Restore the saved snapshot${style.reset}
     ${style.dim}import -w <name> <browser>  Import active browser tabs (chrome|edge|brave|opera)${style.reset}
+  ${style.green}profile <subcommand>${style.reset}        Manage higher-level profiles
+    ${style.dim}show <name>                 Inspect a profile${style.reset}
+    ${style.dim}create <name>               Create a profile, e.g. gaming${style.reset}
+    ${style.dim}rename <profile> <new-name> Rename a profile${style.reset}
+    ${style.dim}add-workspace <profile> <workspace>${style.reset}
+    ${style.dim}remove-workspace <profile> <workspace>${style.reset}
+    ${style.dim}add-workflow <profile> <name> -- <command...>${style.reset}
+    ${style.dim}edit-workflow <profile> <name> -- <command...>${style.reset}
+    ${style.dim}remove-workflow <profile> <name>${style.reset}
+    ${style.dim}launch <profile> or profile --gaming${style.reset}
 
 ${style.bold}Analytics & Utility:${style.reset}
   ${style.green}recent${style.reset}                  Show recently launched apps

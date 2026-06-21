@@ -1,27 +1,46 @@
-import { getApps } from '../storage/db.js';
 import { style } from './utils.js';
+import { buildSearchIndex, interactiveSelect, launch, printResults, search } from '../core/searchEngine.js';
 
 export default {
   name: 'search',
-  description: 'Search registered apps by name',
+  description: 'Search apps, workspaces, snapshots, profiles, and commands',
   async execute(args) {
-    if (args.length === 0) {
-      console.log(`${style.red}Error: Please specify search query.${style.reset}`);
+    if (args.includes('--refresh')) {
+      buildSearchIndex({ force: true });
+      console.log(`${style.green}Search index refreshed.${style.reset}`);
       return;
     }
-    
-    const query = args[0].toLowerCase();
-    const apps = getApps();
-    const matches = apps.filter(app => app.name.toLowerCase().includes(query) || app.id.includes(query));
-    
-    if (matches.length === 0) {
-      console.log('No matching apps found.');
+
+    const shouldLaunch = args.includes('--launch') || args.includes('-l');
+    const queryArgs = args.filter(arg => arg !== '--launch' && arg !== '-l');
+
+    if (queryArgs.length === 0) {
+      if (!process.stdin.isTTY || !process.stdout.isTTY) {
+        console.log(`${style.red}Interactive search requires a TTY. Use: search <query>${style.reset}`);
+        return;
+      }
+      const selected = await interactiveSelect('', { message: 'Search' });
+      if (selected) {
+        console.log(`Launching ${selected.name}...`);
+        await launch(selected);
+      }
       return;
     }
-    
-    matches.forEach(app => {
-      const disguiseText = app.hidden ? ` (hidden)` : '';
-      console.log(app.name + disguiseText);
-    });
+
+    const query = queryArgs.join(' ');
+    const results = await search(query, { limit: 10 });
+
+    if (shouldLaunch) {
+      const selected = results[0];
+      if (!selected) {
+        console.log('No matching apps, workspaces, snapshots, profiles, or commands found.');
+        return;
+      }
+      console.log(`Launching ${selected.name}...`);
+      await launch(selected);
+      return;
+    }
+
+    printResults(results);
   }
 };

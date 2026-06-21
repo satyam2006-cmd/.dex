@@ -11,6 +11,8 @@ lib/dashboard.js
 # Runtime data
 # ──────────────────────────────────────────────
 apps.json
+osAppsCache.json
+searchIndex.json
 *.log
 
 # ──────────────────────────────────────────────

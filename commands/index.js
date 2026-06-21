@@ -17,6 +17,7 @@ import updateCmd from './update.js';
 import serveCmd from './serve.js';
 import snapshotCmd from './snapshot.js';
 import captureCmd from './capture.js';
+import profileCmd from './profile.js';
 
 const commands = [
   createCmd,
@@ -37,7 +38,8 @@ const commands = [
   updateCmd,
   serveCmd,
   snapshotCmd,
-  captureCmd
+  captureCmd,
+  profileCmd
 ];
 
 const registry = {};
