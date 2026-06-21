@@ -27,7 +27,7 @@ function Write-Error ($text) {
 
 Write-Header "Installing .dex CLI"
 
-$DexVersion = "1.0.2"
+$DexVersion = "1.2.1"
 $RequiredNodeMajor = 18
 $PortableNodeVersion = "22.15.0"
 
@@ -382,7 +382,30 @@ try {
 
 Write-Success ".dex CLI installed successfully!"
 
-# 4. Ensure '.dex' command works on Windows (even with Restricted ExecutionPolicy)
+# 4. Build per-user search cache and verify bundled capture extension
+Write-Info "Preparing per-user search index..."
+try {
+    Push-Location $installDir
+    & node "bin\dex.js" search --refresh | Out-Null
+    if ($LASTEXITCODE -eq 0) {
+        Write-Success "Search index prepared in $env:USERPROFILE\.dex"
+    } else {
+        Write-Warn "Search index refresh exited with code $LASTEXITCODE. It will be rebuilt on first search."
+    }
+} catch {
+    Write-Warn "Could not prepare search index. It will be rebuilt on first search."
+} finally {
+    Pop-Location
+}
+
+$captureExtensionPath = Join-Path $installDir "extension\dex-capture"
+if (Test-Path (Join-Path $captureExtensionPath "manifest.json")) {
+    Write-Success "Capture extension available at $captureExtensionPath"
+} else {
+    Write-Warn "Capture extension files were not found at $captureExtensionPath"
+}
+
+# 5. Ensure '.dex' command works on Windows (even with Restricted ExecutionPolicy)
 if ($env:OS -eq "Windows_NT") {
     Write-Info "Configuring .dex command..."
     
@@ -439,9 +462,11 @@ function .dex {
     function global:.dex {
         & dex @args
     }
+
+    # Quick launch hotkey installation skipped (feature removed)
 }
 
-# 5. Show Setup Complete & Usage Info
+# 6. Show Setup Complete & Usage Info
 Write-Host ""
 Write-Host "     .DEX CLI Setup Complete" -ForegroundColor Cyan
 Write-Host "     ------------------------" -ForegroundColor Cyan

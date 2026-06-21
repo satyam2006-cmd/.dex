@@ -1,6 +1,6 @@
 {
   "name": "dex-cli",
-  "version": "1.0.2",
+  "version": "1.2.1",
   "description": ".dex CLI: create desktop web apps, launch native apps, and manage named workspaces from the terminal.",
   "type": "module",
   "bin": {
@@ -9,6 +9,10 @@
   },
   "engines": {
     "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "enquirer": "^2.4.1",
+    "fuse.js": "^7.1.0"
   },
   "scripts": {
     "smoke": "node bin/dex.js --version && node bin/dex.js help"

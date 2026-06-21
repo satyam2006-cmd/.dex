@@ -49,7 +49,7 @@ download_file() {
 
 write_header "Installing .dex CLI"
 
-DEX_VERSION="1.0.2"
+DEX_VERSION="1.2.1"
 REQUIRED_NODE_MAJOR=18
 PORTABLE_NODE_VERSION="22.15.0"
 
@@ -333,7 +333,22 @@ fi
 
 write_success ".dex CLI installed successfully!"
 
-# 4. Configure shell profile for .dex command
+# 4. Build per-user search cache and verify bundled capture extension
+write_info "Preparing per-user search index..."
+if (cd "$INSTALL_DIR" && node bin/dex.js search --refresh >/dev/null 2>&1); then
+    write_success "Search index prepared in $HOME/.dex"
+else
+    write_warn "Could not prepare search index. It will be rebuilt on first search."
+fi
+
+CAPTURE_EXTENSION_PATH="$INSTALL_DIR/extension/dex-capture"
+if [ -f "$CAPTURE_EXTENSION_PATH/manifest.json" ]; then
+    write_success "Capture extension available at $CAPTURE_EXTENSION_PATH"
+else
+    write_warn "Capture extension files were not found at $CAPTURE_EXTENSION_PATH"
+fi
+
+# 5. Configure shell profile for .dex command
 # On Unix/macOS, '.dex' starts with a dot which can conflict with shell builtins.
 # We add a shell alias/function so '.dex' reliably invokes the CLI.
 write_info "Configuring .dex command in shell profile..."
@@ -426,7 +441,7 @@ esac
     command dex "$@"
 }
 
-# 5. Show Setup Complete & Usage Info
+# 6. Show Setup Complete & Usage Info
 echo -e ""
 echo -e "${CYAN}     .DEX CLI Setup Complete${NC}"
 echo -e "${CYAN}     ------------------------${NC}"
