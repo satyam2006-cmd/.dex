@@ -32,64 +32,17 @@ Restart your terminal after installation if your shell has not refreshed PATH ye
 
 Run `.dex` with no arguments to open the interactive shell. Run `.dex --version` to verify the installed version.
 
-## CLI Commands
+## Commands
 
-### Apps
+See [commands.md](commands.md) for the full command reference covering apps, workspaces, snapshots, profiles, analytics, self-update, and more.
 
-```bash
-.dex create <url> [name] [--icon <path_or_url>] [--hidden] [-w <workspace>]
-.dex launch <app...>
-.dex launch -os <native-app>
-.dex list [--all|--hidden]
-.dex search <query>
-.dex info <app>
-.dex update <app-id> [--url <url>] [--name <name>] [--hidden <true|false>] [--unlock] [--workspace <name,csv>]
-.dex remove <app>
-```
-
-`create` turns a URL into a registered desktop app. On Windows it also creates desktop and Start Menu shortcuts, with optional custom icons and hidden/camouflaged shortcuts.
-
-### Workspaces
+## Updating
 
 ```bash
-.dex workspace create -w <name>
-.dex workspace list
-.dex workspace add -w <name> <app>
-.dex workspace add-os -w <name> <native-app>
-.dex workspace launch -w <name>
-.dex workspace rename -w <old-name> <new-name>
-.dex workspace remove -w <name> <app>
-.dex workspace delete -w <name>
+.dex update self
 ```
 
-Workspaces can contain .dex web apps, discovered native OS apps, and system commands. Launching a workspace starts the whole set together.
-
-Native app discovery supports Windows Start Menu shortcuts, macOS `.app` bundles, and Linux `.desktop` launchers. If an app is not discoverable, `.dex` still tries command fallbacks such as `code`, `open -a <app>` on macOS, or common Linux terminal launchers.
-
-### Snapshots and Browser Capture
-
-```bash
-.dex capture install
-.dex capture status
-.dex capture <snapshot-name>
-.dex snapshot save <name>
-.dex snapshot restore <name>
-.dex workspace import -w <name> chrome
-```
-
-The bundled browser extension can capture live tabs from Chromium browsers for accurate session snapshots. The fallback parser still works without the extension, but the extension is the clean path for active-tab capture.
-
-### Analytics and Backup
-
-```bash
-.dex recent
-.dex stats
-.dex summarize
-.dex suggest
-.dex clean
-.dex export <file.json>
-.dex import <file.json>
-```
+Checks the latest version on GitHub and runs the platform installer to upgrade in place.
 
 ## Data Location
 
