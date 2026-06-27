@@ -175,11 +175,11 @@ async function restoreSnapshot(name) {
       }
       for (const url of snapshot.tabs) {
         const detail = tabDetailsMap.get(url);
-        let asApp;
-        if (detail && detail.windowType !== undefined) {
-          asApp = detail.windowType === 'app' || detail.windowType === 'popup';
-        } else {
-          asApp = isRegisteredAppUrl(url) || isChromeAppUrl(url);
+        let asApp = false;
+        if (detail && (detail.windowType === 'app' || detail.windowType === 'popup')) {
+          asApp = true;
+        } else if (isRegisteredAppUrl(url) || isChromeAppUrl(url)) {
+          asApp = true;
         }
         await launchUrl(url, 'auto', asApp);
       }
