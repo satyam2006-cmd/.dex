@@ -110,7 +110,9 @@ export default {
         const { launchSystemCommand } = await import('../core/osApps.js');
         success = await launchSystemCommand(app.name);
       } else {
-        success = await launchUrl(app.url);
+        const isImported = /_[a-z0-9]{4}$/.test(app.id);
+        const asApp = !workspaceMode || !isImported;
+        success = await launchUrl(app.url, 'auto', asApp);
       }
 
       if (success) {
@@ -135,7 +137,9 @@ export default {
           const { launchSystemCommand } = await import('../core/osApps.js');
           success = await launchSystemCommand(app.name);
         } else {
-          success = await launchUrl(app.url);
+          const isImported = /_[a-z0-9]{4}$/.test(app.id);
+          const asApp = !workspaceMode || !isImported;
+          success = await launchUrl(app.url, 'auto', asApp);
         }
 
         if (success) {

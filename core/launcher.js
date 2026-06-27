@@ -28,8 +28,8 @@ export function getBrowsers() {
   return { chrome, edge };
 }
 
-// Launches a URL in app mode
-export function launchUrl(url, preferredBrowser = 'auto') {
+// Launches a URL in app mode or browser tab mode
+export function launchUrl(url, preferredBrowser = 'auto', asApp = true) {
   const browsers = getBrowsers();
   let browserPath = null;
 
@@ -74,8 +74,8 @@ export function launchUrl(url, preferredBrowser = 'auto') {
   }
 
   return new Promise((resolve) => {
-    // Standalone Chromium app mode flag
-    const args = [`--app=${url}`];
+    // Standalone Chromium app mode flag or normal URL
+    const args = asApp ? [`--app=${url}`] : [url];
     
     // Spawn the browser as a detached background process
     const child = spawn(browserPath, args, {

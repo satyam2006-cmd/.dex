@@ -1,6 +1,6 @@
 import readline from 'readline/promises';
 import { getWorkspace, getWorkspaces, addWorkspace, deleteWorkspace, getApp, getApps, addApp, readDb, writeDb } from '../storage/db.js';
-import { style, tick, cross, parseUrlDetails } from './utils.js';
+import { style, tick, cross, parseUrlDetails, isRegisteredAppUrl } from './utils.js';
 
 export default {
   name: 'workspace',
@@ -376,83 +376,8 @@ ${style.bold}Workspace Usage:${style.reset}
       return;
     }
 
-    if (action === 'save') {
-      let currentWs = getWorkspace(workspaceName);
-      if (!currentWs) {
-        currentWs = addWorkspace(workspaceName, []);
-        console.log(`${tick} Created workspace "${workspaceName}".`);
-      }
-      console.log(`Saving snapshot for workspace "${currentWs.name}"...`);
-      const { getRunningGuiApps, getRunningVsCodeFolders } = await import('../core/osApps.js');
-      const { importBrowserTabs } = await import('../core/browserSession.js');
-
-      let tabs = [];
-      try { tabs = importBrowserTabs('chrome'); } catch (_) {}
-      if (tabs.length === 0) {
-        try { tabs = importBrowserTabs('edge'); } catch (_) {}
-      }
-      
-      const ideFolders = getRunningVsCodeFolders();
-      const osApps = await this.filterTerminalApps(getRunningGuiApps(), context);
-
-      const db = readDb();
-      db.workspaces[currentWs.id].snapshot = {
-        tabs,
-        ideFolders,
-        osApps,
-        timestamp: new Date().toISOString()
-      };
-      writeDb(db);
-
-      console.log(`
-${style.bold}${style.green}Snapshot Saved!${style.reset}
-Workspace: ${currentWs.name}
-  - Browser Tabs captured: ${tabs.length}
-  - IDE Folders (VS Code) captured: ${ideFolders.length}
-  - OS GUI Programs captured: ${osApps.length}
-`);
-    } else if (action === 'restore') {
-      const ws = getWorkspace(workspaceName);
-      if (!ws) {
-        console.log(`${style.red}Workspace "${workspaceName}" not found.${style.reset}`);
-        return;
-      }
-      const snapshot = ws.snapshot;
-      if (!snapshot) {
-        console.log(`${style.yellow}No snapshot found for workspace "${ws.name}". Save one first with: workspace snapshot save -w ${ws.name}${style.reset}`);
-        return;
-      }
-      console.log(`Restoring snapshot for workspace "${ws.name}"...`);
-
-      // 1. Restore tabs
-      const { launchUrl } = await import('../core/launcher.js');
-      if (snapshot.tabs && snapshot.tabs.length > 0) {
-        console.log(`Restoring ${snapshot.tabs.length} tabs...`);
-        for (const url of snapshot.tabs) {
-          await launchUrl(url);
-        }
-      }
-
-      // 2. Restore IDE folders
-      const { launchSystemCommand } = await import('../core/osApps.js');
-      if (snapshot.ideFolders && snapshot.ideFolders.length > 0) {
-        console.log(`Opening ${snapshot.ideFolders.length} VS Code folder(s)...`);
-        for (const folder of snapshot.ideFolders) {
-          await launchSystemCommand('code', [folder]);
-        }
-      }
-
-      // 3. Restore OS Apps
-      if (snapshot.osApps && snapshot.osApps.length > 0) {
-        console.log(`Launching ${snapshot.osApps.length} OS Apps...`);
-        for (const app of snapshot.osApps) {
-          await launchSystemCommand(app.path);
-        }
-      }
-      console.log(`${tick} Snapshot restored successfully!`);
-    } else {
-      console.log(`${style.red}Unknown snapshot action "${action}". Use 'save' or 'restore'.${style.reset}`);
-    }
+    const snapshotCmd = (await import('./snapshot.js')).default;
+    await snapshotCmd.execute([action, workspaceName], context);
   },
 
   async handleImport(subArgs, context) {

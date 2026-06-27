@@ -6,6 +6,8 @@ import { addApp } from '../storage/db.js';
 import { createDesktopShortcut } from '../core/shortcut.js';
 import { style, parseUrlDetails, tick, cross } from './utils.js';
 import { pngToIco } from '../core/pngToIco.js';
+import { launchUrl } from '../core/launcher.js';
+
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -180,5 +182,9 @@ Name: ${finalName}
 ${style.yellow}Warning: Failed to create desktop shortcut. App saved to library.${style.reset}
 `);
     }
+
+    // Automatically open the app since we just made/created it
+    console.log(`Opening app ${finalName}...`);
+    await launchUrl(urlArg, 'auto', true);
   }
 };

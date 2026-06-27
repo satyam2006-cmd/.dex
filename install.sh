@@ -49,7 +49,7 @@ download_file() {
 
 write_header "Installing .dex CLI"
 
-DEX_VERSION="1.2.1"
+DEX_VERSION="1.2.2"
 REQUIRED_NODE_MAJOR=18
 PORTABLE_NODE_VERSION="22.15.0"
 

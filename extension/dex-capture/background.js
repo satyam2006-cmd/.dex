@@ -1,19 +1,26 @@
 const BRIDGE = 'http://127.0.0.1:17654';
 
-function cleanTab(tab) {
+function cleanTab(tab, windowTypeMap) {
   if (!tab.url || !/^https?:\/\//i.test(tab.url)) return null;
   return {
     title: tab.title || tab.url,
     url: tab.url,
     windowId: tab.windowId,
     index: tab.index,
-    active: Boolean(tab.active)
+    active: Boolean(tab.active),
+    windowType: windowTypeMap[tab.windowId] || 'normal'
   };
 }
 
 async function sendTabs(requestId) {
+  const windows = await chrome.windows.getAll({});
+  const windowTypeMap = {};
+  windows.forEach(w => {
+    windowTypeMap[w.id] = w.type;
+  });
+
   const tabs = (await chrome.tabs.query({}))
-    .map(cleanTab)
+    .map(tab => cleanTab(tab, windowTypeMap))
     .filter(Boolean)
     .sort((a, b) => (a.windowId - b.windowId) || (a.index - b.index));
 

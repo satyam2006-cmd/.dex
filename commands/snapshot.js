@@ -3,7 +3,7 @@ import { importBrowserTabs } from '../core/browserSession.js';
 import { getRunningGuiApps, launchCapturedApp } from '../core/osApps.js';
 import { launchUrl } from '../core/launcher.js';
 import { getCaptureExtensionPath, requestBrowserTabs } from '../core/tabCaptureBridge.js';
-import { style, tick } from './utils.js';
+import { style, tick, isRegisteredAppUrl, isChromeAppUrl } from './utils.js';
 import readline from 'readline/promises';
 import { stdin as input, stdout as output } from 'process';
 
@@ -120,12 +120,15 @@ async function saveSnapshot(name, options = {}, context = {}) {
   }
 
   const { tabs, tabDetails, warnings } = await captureBrowserTabs(options.extensionOnly);
+  const { getRunningVsCodeFolders } = await import('../core/osApps.js');
+  const ideFolders = getRunningVsCodeFolders();
   const osApps = await filterTerminalApps(getRunningGuiApps(), context);
 
   const db = readDb();
   db.workspaces[ws.id].snapshot = {
     tabs,
     tabDetails,
+    ideFolders,
     osApps,
     timestamp: new Date().toISOString()
   };
@@ -162,9 +165,33 @@ async function restoreSnapshot(name) {
       console.log(`${style.yellow}Skipped browser restore to avoid opening a tab flood.${style.reset}`);
     } else {
       console.log(`Opening ${snapshot.tabs.length} browser tab(s)...`);
-      for (const url of snapshot.tabs) {
-        await launchUrl(url);
+      const tabDetailsMap = new Map();
+      if (snapshot.tabDetails) {
+        for (const detail of snapshot.tabDetails) {
+          if (detail && detail.url) {
+            tabDetailsMap.set(detail.url, detail);
+          }
+        }
       }
+      for (const url of snapshot.tabs) {
+        const detail = tabDetailsMap.get(url);
+        let asApp;
+        if (detail && detail.windowType !== undefined) {
+          asApp = detail.windowType === 'app' || detail.windowType === 'popup';
+        } else {
+          asApp = isRegisteredAppUrl(url) || isChromeAppUrl(url);
+        }
+        await launchUrl(url, 'auto', asApp);
+      }
+    }
+  }
+
+  // 2. Restore IDE folders
+  const { launchSystemCommand } = await import('../core/osApps.js');
+  if (snapshot.ideFolders && snapshot.ideFolders.length > 0) {
+    console.log(`Opening ${snapshot.ideFolders.length} VS Code folder(s)...`);
+    for (const folder of snapshot.ideFolders) {
+      await launchSystemCommand('code', [folder]);
     }
   }
 
