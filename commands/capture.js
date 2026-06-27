@@ -6,6 +6,7 @@ export default {
   name: 'capture',
   description: 'Capture live browser tabs through the .dex browser extension',
   async execute(args, context = {}) {
+    console.log(`${style.dim}Note: If you recently updated .dex, please reload the extension in Chrome (chrome://extensions) to ensure compatibility.${style.reset}`);
     const sub = args[0]?.toLowerCase();
     if (sub === 'install' || sub === '--install') {
       console.log(`${style.bold}.dex Capture Bridge${style.reset}`);

@@ -24,7 +24,7 @@ ${style.bold}Core Commands:${style.reset}
     ${style.dim}--hidden                Camouflage the shortcut in Windows Explorer${style.reset}
     ${style.dim}--icon <path_or_url>    Provide a custom PNG, JPG, ICO, or download link${style.reset}
     ${style.dim}-w, --workspace <name>  Assign app to a workspace on creation${style.reset}
-  ${style.green}update <app-id>${style.reset}         Update app URL, name, hidden status, or workspaces
+  ${style.green}update <app-id>${style.reset}         Update app URL, name, hidden status, workspaces, or CLI ("update self")
     ${style.dim}--url <url>             Update the Web URL${style.reset}
     ${style.dim}--name <name>           Update the display name${style.reset}
     ${style.dim}--hidden <true|false>   Toggle camouflaged status${style.reset}

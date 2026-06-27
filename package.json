@@ -1,6 +1,6 @@
 {
   "name": "dex-cli",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "description": ".dex CLI: create desktop web apps, launch native apps, and manage named workspaces from the terminal.",
   "type": "module",
   "bin": {

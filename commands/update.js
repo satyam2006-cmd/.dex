@@ -5,10 +5,15 @@ import { style } from './utils.js';
 export default {
   name: 'update',
   aliases: ['alter'],
-  description: 'Update app URL, name, hidden status, or workspaces',
+  description: 'Update app URL, name, hidden status, workspaces, or self-update the CLI itself',
   async execute(args) {
     if (args.length === 0) {
-      console.log(`${style.red}Error: Please specify app ID. Usage: update <app-id> [--url <url>] [--name <name>] [--hidden <true|false>] [--unlock] [--workspace <ws>]${style.reset}`);
+      console.log(`${style.red}Error: Please specify app ID or use self-update. Usage: update <app-id> [--url <url>] ... or update self${style.reset}`);
+      return;
+    }
+
+    if (args[0]?.toLowerCase() === 'self' || args.includes('--self')) {
+      await this.handleSelfUpdate();
       return;
     }
 
@@ -74,6 +79,65 @@ export default {
       console.log(`${style.green}App "${updatedApp.name}" updated successfully!${style.reset}`);
     } catch (err) {
       console.log(`${style.green}App metadata updated, but shortcut recreation failed.${style.reset}`);
+    }
+  },
+
+  async handleSelfUpdate() {
+    const { exec } = await import('child_process');
+    const { VERSION } = await import('../core/version.js');
+    const os = await import('os');
+
+    console.log(`Checking for updates...`);
+    try {
+      const res = await fetch('https://raw.githubusercontent.com/satyam2006-cmd/.dex/master/package.json');
+      if (!res.ok) {
+        throw new Error(`Failed to fetch version info: Status ${res.status}`);
+      }
+      const pkg = await res.json();
+      const remoteVersion = pkg.version;
+
+      console.log(`Local version:  ${VERSION}`);
+      console.log(`Remote version: ${remoteVersion}`);
+
+      const isNewer = (() => {
+        const localParts = VERSION.split('.').map(Number);
+        const remoteParts = remoteVersion.split('.').map(Number);
+        for (let i = 0; i < 3; i++) {
+          const l = localParts[i] || 0;
+          const r = remoteParts[i] || 0;
+          if (r > l) return true;
+          if (l > r) return false;
+        }
+        return false;
+      })();
+
+      if (!isNewer) {
+        console.log(`${style.green}You are already on the latest version of .dex (v${VERSION}).${style.reset}`);
+        return;
+      }
+
+      console.log(`A new version (v${remoteVersion}) is available. Updating...`);
+
+      const platform = os.platform();
+      let updateCmd = '';
+      if (platform === 'win32') {
+        updateCmd = 'powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/satyam2006-cmd/.dex/master/install.ps1 | iex"';
+      } else {
+        updateCmd = 'curl -fsSL https://raw.githubusercontent.com/satyam2006-cmd/.dex/master/install.sh | bash';
+      }
+
+      exec(updateCmd, (err, stdout, stderr) => {
+        if (stdout) console.log(stdout);
+        if (stderr) console.error(stderr);
+        if (err) {
+          console.error(`${style.red}Self-update failed: ${err.message}${style.reset}`);
+        } else {
+          console.log(`${style.green}Successfully updated .dex to v${remoteVersion}!${style.reset}`);
+          console.log(`${style.yellow}IMPORTANT: If you use the .dex Chrome extension, please reload it in Chrome (chrome://extensions) to ensure compatibility.${style.reset}`);
+        }
+      });
+    } catch (err) {
+      console.error(`${style.red}Error checking or applying updates: ${err.message}${style.reset}`);
     }
   }
 };
