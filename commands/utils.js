@@ -17,7 +17,18 @@ export function isChromeAppUrl(urlStr) {
       chromeAppsDirs.push(path.join(os.homedir(), '.local/share/applications'));
     }
 
-    const fullUrlLower = urlStr.toLowerCase();
+    let parsedUrl;
+    try {
+      let formattedUrl = urlStr;
+      if (!/^https?:\/\//i.test(urlStr)) {
+        formattedUrl = 'https://' + urlStr;
+      }
+      parsedUrl = new URL(formattedUrl);
+    } catch (_) {
+      return false;
+    }
+    const hostLower = parsedUrl.hostname.toLowerCase();
+    const hostWords = hostLower.split(/[^a-z0-9]+/g).filter(Boolean);
 
     for (const dir of chromeAppsDirs) {
       if (!fs.existsSync(dir)) continue;
@@ -41,7 +52,7 @@ export function isChromeAppUrl(urlStr) {
         const appWords = appName.toLowerCase().split(/[^a-z0-9]+/g).filter(Boolean);
         if (appWords.length === 0) continue;
 
-        if (appWords.every(word => fullUrlLower.includes(word))) {
+        if (appWords.every(word => hostWords.includes(word))) {
           return true;
         }
       }

@@ -1,5 +1,8 @@
 const BRIDGE = 'http://127.0.0.1:17654';
 
+// Compatibility layer and checks to avoid TypeError
+const ext = typeof chrome !== 'undefined' && chrome.runtime ? chrome : (typeof browser !== 'undefined' && browser.runtime ? browser : null);
+
 function cleanTab(tab, windowTypeMap) {
   if (!tab.url || !/^https?:\/\//i.test(tab.url)) return null;
   return {
@@ -13,13 +16,15 @@ function cleanTab(tab, windowTypeMap) {
 }
 
 async function sendTabs(requestId) {
-  const windows = await chrome.windows.getAll({});
+  if (!ext || !ext.windows || !ext.tabs) return;
+
+  const windows = await ext.windows.getAll({});
   const windowTypeMap = {};
   windows.forEach(w => {
     windowTypeMap[w.id] = w.type;
   });
 
-  const tabs = (await chrome.tabs.query({}))
+  const tabs = (await ext.tabs.query({}))
     .map(tab => cleanTab(tab, windowTypeMap))
     .filter(Boolean)
     .sort((a, b) => (a.windowId - b.windowId) || (a.index - b.index));
@@ -43,22 +48,36 @@ async function pollBridge() {
   } catch (_) {}
 }
 
-chrome.runtime.onInstalled.addListener(() => {
-  chrome.alarms.create('dex-poll', { periodInMinutes: 0.05 });
-  pollBridge();
-});
-
-chrome.runtime.onStartup.addListener(() => {
-  chrome.alarms.create('dex-poll', { periodInMinutes: 0.05 });
-  pollBridge();
-});
-
-chrome.alarms.onAlarm.addListener((alarm) => {
-  if (alarm.name === 'dex-poll') {
-    pollBridge();
+if (ext) {
+  if (ext.runtime && ext.runtime.onInstalled) {
+    ext.runtime.onInstalled.addListener(() => {
+      if (ext.alarms) {
+        ext.alarms.create('dex-poll', { periodInMinutes: 0.05 });
+      }
+      pollBridge();
+    });
   }
-});
 
-chrome.action.onClicked.addListener(() => {
-  pollBridge();
-});
+  if (ext.runtime && ext.runtime.onStartup) {
+    ext.runtime.onStartup.addListener(() => {
+      if (ext.alarms) {
+        ext.alarms.create('dex-poll', { periodInMinutes: 0.05 });
+      }
+      pollBridge();
+    });
+  }
+
+  if (ext.alarms && ext.alarms.onAlarm) {
+    ext.alarms.onAlarm.addListener((alarm) => {
+      if (alarm.name === 'dex-poll') {
+        pollBridge();
+      }
+    });
+  }
+
+  if (ext.action && ext.action.onClicked) {
+    ext.action.onClicked.addListener(() => {
+      pollBridge();
+    });
+  }
+}

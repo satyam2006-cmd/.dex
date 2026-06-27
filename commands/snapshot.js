@@ -176,8 +176,12 @@ async function restoreSnapshot(name) {
       for (const url of snapshot.tabs) {
         const detail = tabDetailsMap.get(url);
         let asApp = false;
-        if (detail && (detail.windowType === 'app' || detail.windowType === 'popup')) {
-          asApp = true;
+        if (detail && detail.windowType) {
+          if (detail.windowType === 'app' || detail.windowType === 'popup') {
+            asApp = true;
+          } else {
+            asApp = false;
+          }
         } else if (isRegisteredAppUrl(url) || isChromeAppUrl(url)) {
           asApp = true;
         }
