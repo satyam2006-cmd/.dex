@@ -4,6 +4,11 @@
 
 .dex is a terminal-first workspace launcher for people who live across web apps, native apps, and browser sessions. Create standalone desktop web apps, group them into named workspaces, capture the state of a working session, and relaunch it from one command.
 
+## .dex in Action
+<p align="center">
+  <img src="assets/.dex.gif" alt=".dex Demo" width="900">
+</p>
+
 ## Install
 
 The installers are one-shot scripts: they check for Node.js 18+, install or bootstrap Node when possible, fetch or update .dex, install package dependencies, and link the `dex` / `.dex` CLI globally.
