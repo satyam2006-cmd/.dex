@@ -29,8 +29,6 @@ const COMMAND_DEFINITIONS = [
   ['summarize', 'Show weekly launch summary'],
   ['workspace', 'Manage workspaces'],
   ['snapshot', 'Save and restore snapshots'],
-  ['capture', 'Capture live browser tabs'],
-  ['serve', 'Serve dashboard assets'],
   ['profile', 'Manage and launch profiles']
 ];
 
@@ -700,7 +698,7 @@ export function buildCatalog(options = {}) {
       name: profile.name,
       type: 'profile',
       path: profile.id,
-      aliases: ['profile', 'mode', ...(profile.workspaces || []), ...(profile.workflows || []).map(flow => flow.name || flow.command || '').filter(Boolean)],
+      aliases: ['profile', 'mode', ...(profile.workspaces || [])],
       category: 'Profile',
       launchCount: profile.launches,
       lastUsed: profile.lastOpened ? new Date(profile.lastOpened).getTime() : 0,

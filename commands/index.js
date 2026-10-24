@@ -14,9 +14,7 @@ import summarizeCmd from './summarize.js';
 import helpCmd from './help.js';
 import workspaceCmd from './workspace.js';
 import updateCmd from './update.js';
-import serveCmd from './serve.js';
 import snapshotCmd from './snapshot.js';
-import captureCmd from './capture.js';
 import profileCmd from './profile.js';
 
 const commands = [
@@ -36,9 +34,7 @@ const commands = [
   helpCmd,
   workspaceCmd,
   updateCmd,
-  serveCmd,
   snapshotCmd,
-  captureCmd,
   profileCmd
 ];
 

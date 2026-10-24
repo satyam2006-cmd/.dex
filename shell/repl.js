@@ -5,7 +5,7 @@ import fs from 'fs';
 import path from 'path';
 
 import { getCommand } from '../commands/index.js';
-import { getApps, getWorkspaces, getStats, getRecent } from '../storage/db.js';
+import { getApps, getWorkspaces, getProfiles, getStats, getRecent } from '../storage/db.js';
 import { style, formatRelativeTime, getSystemUptime } from '../commands/utils.js';
 import { scanOsApps } from '../core/osApps.js';
 
@@ -99,7 +99,7 @@ function showBrandedStartupScreen() {
   const info = [
     `${style.bold}${style.cyan}${username}@${hostname}${style.reset}`,
     `${style.dim}------------------------${style.reset}`,
-    `${style.bold}Product:${style.reset} .dex CLI & Web Dashboard`,
+    `${style.bold}Product:${style.reset} .dex CLI`,
     `${style.bold}OS:${style.reset} ${osType} ${os.arch()} (${osRelease})`,
     `${style.bold}Kernel:${style.reset} ${os.version().split('\n')[0].substring(0, 30)}`,
     `${style.bold}Uptime:${style.reset} ${uptime}`,
@@ -128,7 +128,7 @@ export function completer(line) {
   const builtInCommands = [
     'launch', 'create', 'update', 'list', 'search', 'remove', 
     'recent', 'stats', 'info', 'export', 'import', 'suggest', 
-    'clean', 'summarize', 'help', 'exit', 'workspace', 'snapshot', 'capture', 'clear', 'cls'
+    'clean', 'summarize', 'help', 'exit', 'workspace', 'snapshot', 'profile', 'clear', 'cls'
   ];
 
   const apps = getApps();
@@ -139,6 +139,7 @@ export function completer(line) {
     osAppNames = Object.values(scanOsApps()).map(app => app.name.toLowerCase());
   } catch (_) {}
   const workspaces = Object.keys(getWorkspaces());
+  const profileKeys = Object.keys(getProfiles());
 
   const rawParts = line.trimStart().split(/\s+/);
   const currentWord = rawParts[rawParts.length - 1] || '';
@@ -174,29 +175,17 @@ export function completer(line) {
     return [hits, query];
   }
 
-  if (cmd === 'capture') {
-    const query = isTrailingSpace ? '' : currentWord.toLowerCase();
-    if (rawParts.length === 2 && !isTrailingSpace) {
-      const candidates = ['install', 'status', ...workspaces];
-      const hits = candidates.filter(c => c.startsWith(query));
-      return [hits, query];
-    }
-    if (rawParts.length === 2 && isTrailingSpace) {
-      return [['install', 'status', ...workspaces], ''];
-    }
-  }
-
   if (cmd === 'snapshot') {
     const query = isTrailingSpace ? '' : currentWord.toLowerCase();
     if (rawParts.length === 2 && !isTrailingSpace) {
-      const candidates = ['save', 'restore'];
+      const candidates = ['save', 'restore', 'extension', 'status'];
       const hits = candidates.filter(c => c.startsWith(query));
       return [hits, query];
     }
     if (rawParts.length === 2 && isTrailingSpace) {
-      return [['save', 'restore'], ''];
+      return [['save', 'restore', 'extension', 'status'], ''];
     }
-    if (rawParts[1] === 'restore') {
+    if (rawParts[1] === 'restore' || rawParts[1] === 'save') {
       const hits = workspaces.filter(w => w.startsWith(query));
       return [hits, query];
     }
@@ -205,13 +194,13 @@ export function completer(line) {
   if (cmd === 'workspace') {
     if (rawParts.length === 2 && !isTrailingSpace) {
       const query = rawParts[1].toLowerCase();
-      const candidates = ['create', 'delete', 'remove', 'rename', 'update', 'list', 'add', 'remove-app', 'launch', 'snapshot', 'import'];
+      const candidates = ['create', 'delete', 'remove', 'rename', 'update', 'list', 'add', 'remove-app', 'launch', 'snapshot'];
       const hits = candidates.filter(c => c.startsWith(query));
       return [hits, query];
     }
 
     if (rawParts.length === 2 && isTrailingSpace) {
-      const candidates = ['create', 'delete', 'remove', 'rename', 'update', 'list', 'add', 'remove-app', 'launch', 'snapshot', 'import'];
+      const candidates = ['create', 'delete', 'remove', 'rename', 'update', 'list', 'add', 'remove-app', 'launch', 'snapshot'];
       return [candidates, ''];
     }
 
@@ -232,11 +221,6 @@ export function completer(line) {
         const hits = candidates.filter(c => c.startsWith(query));
         return [hits, query];
       }
-      if (sub === 'import') {
-        const candidates = ['chrome', 'edge', 'brave', 'opera', 'firefox'];
-        const hits = candidates.filter(c => c.startsWith(query));
-        return [hits, query];
-      }
       if (sub === 'snapshot') {
         const candidates = ['save', 'restore'];
         const hits = candidates.filter(c => c.startsWith(query));
@@ -251,9 +235,6 @@ export function completer(line) {
         if (sub === 'add' || sub === 'remove' || sub === 'remove-app') {
           return [[...appIds, ...appNames], ''];
         }
-        if (sub === 'import') {
-          return [['chrome', 'edge', 'brave', 'opera', 'firefox'], ''];
-        }
         if (sub === 'snapshot') {
           return [['save', 'restore'], ''];
         }
@@ -264,16 +245,45 @@ export function completer(line) {
           const hits = candidates.filter(c => c.startsWith(query));
           return [hits, query];
         }
-        if (sub === 'import') {
-          const candidates = ['chrome', 'edge', 'brave', 'opera', 'firefox'];
-          const hits = candidates.filter(c => c.startsWith(query));
-          return [hits, query];
-        }
         if (sub === 'snapshot') {
           const candidates = ['save', 'restore'];
           const hits = candidates.filter(c => c.startsWith(query));
           return [hits, query];
         }
+      }
+    }
+  }
+
+  if (cmd === 'profile') {
+    const subCommands = ['list', 'ls', 'show', 'info', 'view', 'create', 'delete', 'remove', 'rename', 'add-workspace', 'remove-workspace', 'launch', 'run'];
+    if (rawParts.length === 2 && !isTrailingSpace) {
+      const query = rawParts[1].toLowerCase();
+      const hits = subCommands.filter(c => c.startsWith(query));
+      return [hits, query];
+    }
+    if (rawParts.length === 2 && isTrailingSpace) {
+      return [subCommands, ''];
+    }
+
+    const sub = rawParts[1].toLowerCase();
+    const query = isTrailingSpace ? '' : currentWord.toLowerCase();
+
+    if (['show', 'info', 'view', 'delete', 'remove', 'rename', 'launch', 'run'].includes(sub)) {
+      const hits = profileKeys.filter(p => p.startsWith(query));
+      return [hits, query];
+    }
+
+    if (['add-workspace', 'remove-workspace'].includes(sub)) {
+      if (rawParts.length === 3 && !isTrailingSpace) {
+        const hits = profileKeys.filter(p => p.startsWith(query));
+        return [hits, query];
+      }
+      if (rawParts.length === 3 && isTrailingSpace) {
+        return [workspaces, ''];
+      }
+      if (rawParts.length === 4 && !isTrailingSpace) {
+        const hits = workspaces.filter(w => w.startsWith(query));
+        return [hits, query];
       }
     }
   }

@@ -4,7 +4,7 @@ import { style, tick, cross, parseUrlDetails, isRegisteredAppUrl } from './utils
 
 export default {
   name: 'workspace',
-  description: 'Manage workspaces, snapshots, and browser tab imports',
+  description: 'Manage workspaces and session snapshots',
   async execute(args, context = {}) {
     if (args.length === 0) {
       this.showHelp();
@@ -45,9 +45,6 @@ export default {
       case 'snapshot':
         await this.handleSnapshot(subArgs, context);
         break;
-      case 'import':
-        await this.handleImport(subArgs, context);
-        break;
       default:
         console.log(`${style.red}Unknown workspace subcommand: "${sub}"${style.reset}`);
         this.showHelp();
@@ -66,9 +63,8 @@ ${style.bold}Workspace Usage:${style.reset}
   workspace add-os -w <name> <os-app-name>     Add a native OS app (e.g. notepad, spotify)
   workspace remove -w <name> <app-name>        Remove an app from a workspace
   workspace launch -w <name>                   Launch all apps in a workspace
-  workspace snapshot save -w <name>            Save current open tabs and VS Code folders
+  workspace snapshot save -w <name>            Save current VS Code folders and running apps
   workspace snapshot restore -w <name>        Restore the saved snapshot
-  workspace import -w <name> <browser>         Import open tabs from Chrome/Edge/Brave/Opera
 `);
   },
 
@@ -378,77 +374,6 @@ ${style.bold}Workspace Usage:${style.reset}
 
     const snapshotCmd = (await import('./snapshot.js')).default;
     await snapshotCmd.execute([action, workspaceName], context);
-  },
-
-  async handleImport(subArgs, context) {
-    const { workspaceName, extraArgs } = this.parseWorkspaceArgs(subArgs);
-    const browser = extraArgs[0];
-    if (!workspaceName || !browser) {
-      console.log(`${style.red}Error: Please specify workspace and browser. Example: workspace import -w coding chrome${style.reset}`);
-      return;
-    }
-
-    console.log(`Scanning active tabs from "${browser}"...`);
-    const { importBrowserTabs } = await import('../core/browserSession.js');
-    
-    let urls = [];
-    try {
-      urls = importBrowserTabs(browser);
-    } catch (err) {
-      console.log(`${style.red}Error importing tabs: ${err.message}${style.reset}`);
-      return;
-    }
-
-    if (urls.length === 0) {
-      console.log(`${style.yellow}No active tabs found in browser "${browser}".${style.reset}`);
-      return;
-    }
-
-    console.log(`Found ${urls.length} active tab(s) in "${browser}".`);
-    
-    let answer = '';
-    const questionText = `Import these ${urls.length} tabs into workspace "${workspaceName}"? (Y/N): `;
-    if (context.rl) {
-      answer = await context.rl.question(questionText);
-    } else {
-      const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-      answer = await rl.question(questionText);
-      rl.close();
-    }
-
-    if (answer.trim().toLowerCase() === 'y' || answer.trim().toLowerCase() === 'yes') {
-      let ws = getWorkspace(workspaceName);
-      if (!ws) {
-        addWorkspace(workspaceName, []);
-        ws = getWorkspace(workspaceName);
-      }
-
-      const importedApps = [];
-      for (const url of urls) {
-        const details = parseUrlDetails(url);
-        const appId = details.id + '_' + Math.random().toString(36).substring(2, 6);
-        const appData = {
-          id: appId,
-          name: details.name,
-          url: url,
-          workspaces: [ws.id]
-        };
-        addApp(appData);
-
-        try {
-          const { createDesktopShortcut } = await import('../core/shortcut.js');
-          await createDesktopShortcut(details.name, appId, false);
-        } catch (_) {}
-
-        importedApps.push(appId);
-      }
-
-      const newApps = [...new Set([...ws.apps, ...importedApps])];
-      addWorkspace(ws.name, newApps);
-      console.log(`${tick} Successfully imported ${importedApps.length} tabs into workspace "${workspaceName}".`);
-    } else {
-      console.log('Import cancelled.');
-    }
   },
 
   handleList() {

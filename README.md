@@ -1,8 +1,7 @@
-# .dex CLI
 
 ![.dex CLI preview](webpreview.png)
 
-.dex is a terminal-first workspace launcher for people who live across web apps, native apps, and browser sessions. Create standalone desktop web apps, group them into named workspaces, capture the state of a working session, and relaunch it from one command.
+.dex is a terminal-first workspace launcher for people who live across web apps and native desktop apps. Create standalone desktop web apps, group them into named workspaces, save snapshots of working sessions, and relaunch them from one command.
 
 ## .dex in Action
 <p align="center">

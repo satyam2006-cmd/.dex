@@ -1,8 +1,7 @@
 import { getWorkspace, addWorkspace, readDb, writeDb } from '../storage/db.js';
-import { importBrowserTabs } from '../core/browserSession.js';
 import { getRunningGuiApps, launchCapturedApp } from '../core/osApps.js';
 import { launchUrl } from '../core/launcher.js';
-import { getCaptureExtensionPath, requestBrowserTabs } from '../core/tabCaptureBridge.js';
+import { checkCaptureExtension, getCaptureExtensionPath, requestBrowserTabs } from '../core/tabCaptureBridge.js';
 import { style, tick, isRegisteredAppUrl, isChromeAppUrl } from './utils.js';
 import readline from 'readline/promises';
 import { stdin as input, stdout as output } from 'process';
@@ -11,7 +10,6 @@ function parseSnapshotArgs(args) {
   const action = args[0]?.toLowerCase();
   const rest = action === 'save' || action === 'restore' ? args.slice(1) : args;
   let name = '';
-  const extensionOnly = rest.includes('--extension-only');
 
   for (let i = 0; i < rest.length; i++) {
     if ((rest[i] === '-w' || rest[i] === '--workspace') && rest[i + 1]) {
@@ -24,10 +22,10 @@ function parseSnapshotArgs(args) {
     }
   }
 
-  return { action, name, extensionOnly };
+  return { action, name };
 }
 
-async function captureBrowserTabs(extensionOnly = false) {
+async function captureBrowserTabs() {
   try {
     const extensionTabs = await requestBrowserTabs();
     return {
@@ -36,35 +34,12 @@ async function captureBrowserTabs(extensionOnly = false) {
       warnings: []
     };
   } catch (err) {
-    if (extensionOnly) {
-      return {
-        tabs: [],
-        tabDetails: [],
-        warnings: [`${err.message}. Run: capture install`]
-      };
-    }
+    return {
+      tabs: [],
+      tabDetails: [],
+      warnings: [`Browser tabs not captured: ${err.message}. (Run: snapshot extension)`]
+    };
   }
-
-  const browsers = ['chrome', 'edge', 'brave', 'opera', 'firefox'];
-  const urls = new Set();
-  const warnings = [`Extension not connected; using limited fallback parser. For accurate live tabs, load: ${getCaptureExtensionPath()}`];
-
-  for (const browser of browsers) {
-    try {
-      const browserUrls = importBrowserTabs(browser);
-      if (browserUrls.length > 40) {
-        warnings.push(`${browser}: skipped ${browserUrls.length} extracted URLs because that looks like browser history, not open tabs`);
-        continue;
-      }
-      browserUrls.forEach(url => urls.add(url));
-    } catch (_) {}
-  }
-
-  return {
-    tabs: Array.from(urls),
-    tabDetails: Array.from(urls).map(url => ({ title: url, url })),
-    warnings
-  };
 }
 
 function isTerminalApp(app) {
@@ -119,7 +94,7 @@ async function saveSnapshot(name, options = {}, context = {}) {
     console.log(`${tick} Created snapshot "${name}".`);
   }
 
-  const { tabs, tabDetails, warnings } = await captureBrowserTabs(options.extensionOnly);
+  const { tabs, tabDetails, warnings } = await captureBrowserTabs();
   const { getRunningVsCodeFolders } = await import('../core/osApps.js');
   const ideFolders = getRunningVsCodeFolders();
   const osApps = await filterTerminalApps(getRunningGuiApps(), context);
@@ -143,6 +118,7 @@ ${style.bold}${style.green}Snapshot Saved!${style.reset}
 Name: ${ws.name}
   - Browser tabs captured: ${tabs.length}
   - Apps in use captured: ${osApps.length}
+  - VS Code folders captured: ${ideFolders.length}
 
 ${style.dim}Restore it with:${style.reset}
   snapshot restore ${ws.name}
@@ -159,34 +135,26 @@ async function restoreSnapshot(name) {
   const snapshot = ws.snapshot;
   console.log(`Restoring snapshot "${ws.name}"...`);
 
+  // 1. Restore browser tabs
   if (snapshot.tabs && snapshot.tabs.length > 0) {
-    if (snapshot.tabs.length > 40) {
-      console.log(`${style.yellow}Snapshot has ${snapshot.tabs.length} browser tabs, which looks suspicious. Re-save it with: snapshot save ${ws.name}${style.reset}`);
-      console.log(`${style.yellow}Skipped browser restore to avoid opening a tab flood.${style.reset}`);
-    } else {
-      console.log(`Opening ${snapshot.tabs.length} browser tab(s)...`);
-      const tabDetailsMap = new Map();
-      if (snapshot.tabDetails) {
-        for (const detail of snapshot.tabDetails) {
-          if (detail && detail.url) {
-            tabDetailsMap.set(detail.url, detail);
-          }
+    console.log(`Opening ${snapshot.tabs.length} browser tab(s)...`);
+    const tabDetailsMap = new Map();
+    if (snapshot.tabDetails) {
+      for (const detail of snapshot.tabDetails) {
+        if (detail && detail.url) {
+          tabDetailsMap.set(detail.url, detail);
         }
       }
-      for (const url of snapshot.tabs) {
-        const detail = tabDetailsMap.get(url);
-        let asApp = false;
-        if (detail && detail.windowType) {
-          if (detail.windowType === 'app' || detail.windowType === 'popup') {
-            asApp = true;
-          } else {
-            asApp = false;
-          }
-        } else if (isRegisteredAppUrl(url) || isChromeAppUrl(url)) {
-          asApp = true;
-        }
-        await launchUrl(url, 'auto', asApp);
+    }
+    for (const url of snapshot.tabs) {
+      const detail = tabDetailsMap.get(url);
+      let asApp = false;
+      if (detail && detail.windowType) {
+        asApp = detail.windowType === 'app' || detail.windowType === 'popup';
+      } else if (isRegisteredAppUrl(url) || isChromeAppUrl(url)) {
+        asApp = true;
       }
+      await launchUrl(url, 'auto', asApp);
     }
   }
 
@@ -199,6 +167,7 @@ async function restoreSnapshot(name) {
     }
   }
 
+  // 3. Restore OS apps
   if (snapshot.osApps && snapshot.osApps.length > 0) {
     console.log(`Launching ${snapshot.osApps.length} OS app(s)...`);
     for (const app of snapshot.osApps) {
@@ -211,14 +180,40 @@ async function restoreSnapshot(name) {
 
 export default {
   name: 'snapshot',
-  description: 'Save and restore named workspace snapshots',
+  description: 'Save and restore named workspace snapshots (browser tabs, apps, IDE folders)',
   async execute(args, context = {}) {
-    const { action, name, extensionOnly } = parseSnapshotArgs(args);
+    const sub = args[0]?.toLowerCase();
+
+    if (sub === 'extension' || sub === '--extension' || sub === 'install') {
+      console.log(`${style.bold}.dex Capture Bridge Extension${style.reset}`);
+      console.log('Load this bundled extension once in Chrome, Edge, or Brave:');
+      console.log(`  ${getCaptureExtensionPath()}`);
+      console.log('');
+      console.log('1. Open chrome://extensions (or edge://extensions)');
+      console.log('2. Enable "Developer mode" toggle');
+      console.log('3. Click "Load unpacked" and select the folder above.');
+      return;
+    }
+
+    if (sub === 'status') {
+      try {
+        await checkCaptureExtension();
+        console.log(`${style.green}.dex Capture Bridge is connected.${style.reset}`);
+      } catch (err) {
+        console.log(`${style.yellow}${err.message}${style.reset}`);
+        console.log('Run: snapshot extension');
+      }
+      return;
+    }
+
+    const { action, name } = parseSnapshotArgs(args);
 
     if (!action || (action !== 'save' && action !== 'restore')) {
       console.log(`${style.red}Error: Please specify snapshot action ('save' or 'restore').${style.reset}`);
       console.log('Usage: snapshot save <name>');
       console.log('       snapshot restore <name>');
+      console.log('       snapshot extension');
+      console.log('       snapshot status');
       return;
     }
 
@@ -228,7 +223,7 @@ export default {
     }
 
     if (action === 'save') {
-      await saveSnapshot(name, { extensionOnly }, context);
+      await saveSnapshot(name, {}, context);
     } else {
       await restoreSnapshot(name);
     }

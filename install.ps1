@@ -27,7 +27,7 @@ function Write-Error ($text) {
 
 Write-Header "Installing .dex CLI"
 
-$DexVersion = "1.2.2"
+$DexVersion = "1.2.3"
 $RequiredNodeMajor = 18
 $PortableNodeVersion = "22.15.0"
 

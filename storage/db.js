@@ -40,6 +40,9 @@ export function readDb(forceRefresh = false) {
     if (!cachedDb.apps) cachedDb.apps = {};
     if (!cachedDb.workspaces) cachedDb.workspaces = {};
     if (!cachedDb.profiles) cachedDb.profiles = {};
+    Object.values(cachedDb.profiles).forEach(p => {
+      if (p && p.workflows) delete p.workflows;
+    });
     if (!cachedDb.launches_log) cachedDb.launches_log = [];
     if (!cachedDb.version) cachedDb.version = VERSION;
     return cachedDb;
@@ -218,7 +221,6 @@ export function addProfile(name, fields = {}) {
     id,
     name: fields.name || existing.name || displayName,
     workspaces: fields.workspaces || existing.workspaces || [],
-    workflows: fields.workflows || existing.workflows || [],
     created: existing.created || new Date().toISOString(),
     lastOpened: existing.lastOpened || null,
     launches: existing.launches || 0
@@ -237,9 +239,9 @@ export function updateProfile(id, fields = {}) {
     ...db.profiles[key],
     ...fields,
     id: key,
-    workspaces: Array.isArray(fields.workspaces) ? fields.workspaces : db.profiles[key].workspaces || [],
-    workflows: Array.isArray(fields.workflows) ? fields.workflows : db.profiles[key].workflows || []
+    workspaces: Array.isArray(fields.workspaces) ? fields.workspaces : db.profiles[key].workspaces || []
   };
+  delete db.profiles[key].workflows;
   writeDb(db);
   return db.profiles[key];
 }

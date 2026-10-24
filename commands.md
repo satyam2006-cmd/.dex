@@ -88,26 +88,17 @@ Show detailed information about a registered app, including creation time, last 
 
 ## Workspaces & Productivity
 
-### `capture`
-Capture live open browser tabs using the `.dex` browser extension.
-* **Usage**: `capture <name>` or `capture install` or `capture status`
-* **Subcommands**:
-  * `install`: Shows the unpacked path of the bundled browser extension so you can load it in Developer Mode.
-  * `status`: Checks whether the capture bridge extension is currently active and connected.
-* **Example**:
-  ```bash
-  .dex capture coding-session
-  ```
-
 ### `snapshot`
 Save and restore workspace session snapshots (browser tabs, open IDE folders, native apps).
-* **Usage**: `snapshot save <name>` or `snapshot restore <name>`
+* **Usage**: `snapshot save <name>` or `snapshot restore <name>` or `snapshot extension` or `snapshot status`
 * **Subcommands**:
-  * `save <name>`: Captures current open tabs (from active Chromium browsers) and running GUI applications, saving it under the given workspace/snapshot name.
-  * `restore <name>`: Launches all GUI apps, VS Code folders, and opens browser tabs captured in the saved snapshot.
+  * `save <name>`: Captures current open browser tabs (via the bundled extension bridge), running GUI applications, and active VS Code folders under the given workspace/snapshot name.
+  * `restore <name>`: Launches all GUI apps, VS Code folders, and re-opens browser tabs captured in the saved snapshot.
+  * `extension`: Shows the path to the bundled browser extension so you can load it in Developer Mode.
+  * `status`: Checks whether the browser capture bridge extension is currently connected.
 
 ### `workspace`
-Manage structured workspaces, snapshots, and tab imports.
+Manage structured workspaces and session snapshots.
 * **Usage**: `workspace <subcommand>`
 * **Subcommands**:
   * `list` (or `ls`): List all workspaces and their associated apps.
@@ -115,25 +106,23 @@ Manage structured workspaces, snapshots, and tab imports.
   * `delete -w <name>`: Delete an existing workspace.
   * `rename -w <old-name> <new-name>`: Rename a workspace.
   * `add -w <workspace> <app>`: Add a registered app to a workspace.
+  * `add-os -w <workspace> <os-app>`: Add a native OS app (e.g. notepad, spotify).
   * `remove -w <workspace> <app>`: Remove an app from a workspace.
-  * `launch -w <name>`: Launch all apps and tabs inside a workspace.
+  * `launch -w <name>`: Launch all apps inside a workspace.
   * `snapshot save -w <name>`: Save the current session snapshot for the workspace.
   * `snapshot restore -w <name>`: Restore the saved snapshot for the workspace.
-  * `import -w <name> <browser>`: Import currently open tabs from a browser (chrome, edge, brave, opera).
 
 ### `profile`
-Manage higher-level launch profiles (group multiple workspaces and custom workflow command chains).
+Manage higher-level launch profiles (group multiple workspaces together).
 * **Usage**: `profile <subcommand>`
 * **Subcommands**:
   * `list` (or `ls`): List all profiles.
-  * `show <name>` (or `info`/`view`): Inspect workspace and workflow assignments in a profile.
+  * `show <name>` (or `info`/`view`): Inspect workspace assignments in a profile.
   * `create <name>`: Create a new profile.
   * `rename <profile> <new-name>`: Rename a profile.
+  * `delete <profile>`: Delete a profile.
   * `add-workspace <profile> <workspace>`: Add a workspace to a profile.
   * `remove-workspace <profile> <workspace>`: Remove a workspace from a profile.
-  * `add-workflow <profile> <name> -- <command...>`: Add a custom command chain that runs sequentially during profile launch.
-  * `edit-workflow <profile> <name> -- <command...>`: Update an existing workflow command in the profile.
-  * `remove-workflow <profile> <name>`: Remove a workflow command from the profile.
   * `launch <profile>`: Launch the profile.
   * `--<profile-name>`: Shortcut to run/launch a profile (e.g. `profile --gaming`).
 
@@ -168,7 +157,3 @@ Interactively prompt to remove apps (and delete their desktop shortcuts) that ha
 ### `summarize`
 Show a weekly launch activity summary displaying a text-based usage bar chart by day of the week, plus the top 5 most active apps.
 * **Usage**: `summarize`
-
-### `serve`
-Start the Web Dashboard server (under development, planned for v2).
-* **Usage**: `serve` (or `dashboard`)

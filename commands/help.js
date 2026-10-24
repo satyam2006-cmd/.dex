@@ -40,12 +40,11 @@ ${style.bold}Core Commands:${style.reset}
   ${style.green}info <app-name>${style.reset}           Show detailed information about an app
 
 ${style.bold}Workspaces & Productivity:${style.reset}
-  ${style.green}capture <name>${style.reset}              Capture live browser tabs using the .dex extension
-  ${style.green}capture install${style.reset}             Show the bundled extension path to load once
-  ${style.green}capture status${style.reset}              Check whether the extension is connected
-  ${style.green}snapshot save <name>${style.reset}        Save open browser tabs and apps in use
+  ${style.green}snapshot save <name>${style.reset}        Save open browser tabs, apps, and VS Code folders
   ${style.green}snapshot restore <name>${style.reset}     Restore a saved session snapshot
-  ${style.green}workspace <subcommand>${style.reset}      Manage workspaces, snapshots, and tab imports
+  ${style.green}snapshot extension${style.reset}          Show path of bundled extension to load in browser
+  ${style.green}snapshot status${style.reset}             Check whether the extension bridge is connected
+  ${style.green}workspace <subcommand>${style.reset}      Manage workspaces and snapshots
     ${style.dim}list                        List all workspaces and their apps${style.reset}
     ${style.dim}create -w <name>            Create a new empty workspace${style.reset}
     ${style.dim}delete -w <name>            Delete an existing workspace${style.reset}
@@ -53,18 +52,16 @@ ${style.bold}Workspaces & Productivity:${style.reset}
     ${style.dim}add -w <ws> <app>           Add an app to a workspace${style.reset}
     ${style.dim}remove -w <ws> <app>        Remove an app from a workspace${style.reset}
     ${style.dim}launch -w <name>            Launch all apps in a workspace${style.reset}
-    ${style.dim}snapshot save -w <name>     Save current open browser tabs and VS Code folders${style.reset}
+    ${style.dim}snapshot save -w <name>     Save open browser tabs, apps, and VS Code folders${style.reset}
     ${style.dim}snapshot restore -w <name>  Restore the saved snapshot${style.reset}
-    ${style.dim}import -w <name> <browser>  Import active browser tabs (chrome|edge|brave|opera)${style.reset}
   ${style.green}profile <subcommand>${style.reset}        Manage higher-level profiles
+    ${style.dim}list                        List all profiles${style.reset}
     ${style.dim}show <name>                 Inspect a profile${style.reset}
     ${style.dim}create <name>               Create a profile, e.g. gaming${style.reset}
     ${style.dim}rename <profile> <new-name> Rename a profile${style.reset}
+    ${style.dim}delete <profile>            Delete a profile${style.reset}
     ${style.dim}add-workspace <profile> <workspace>${style.reset}
     ${style.dim}remove-workspace <profile> <workspace>${style.reset}
-    ${style.dim}add-workflow <profile> <name> -- <command...>${style.reset}
-    ${style.dim}edit-workflow <profile> <name> -- <command...>${style.reset}
-    ${style.dim}remove-workflow <profile> <name>${style.reset}
     ${style.dim}launch <profile> or profile --gaming${style.reset}
 
 ${style.bold}Analytics & Utility:${style.reset}
