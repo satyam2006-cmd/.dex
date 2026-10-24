@@ -25,21 +25,54 @@ function parseSnapshotArgs(args) {
   return { action, name };
 }
 
-async function captureBrowserTabs() {
+async function captureBrowserTabs(context = {}) {
+  // Quick probe: if extension is already active, this resolves quickly (< 1.5s)
   try {
-    const extensionTabs = await requestBrowserTabs();
+    const extensionTabs = await requestBrowserTabs(1500);
     return {
       tabs: extensionTabs.map(tab => tab.url),
       tabDetails: extensionTabs,
       warnings: []
     };
-  } catch (err) {
-    return {
-      tabs: [],
-      tabDetails: [],
-      warnings: [`Browser tabs not captured: ${err.message}. (Run: snapshot extension)`]
-    };
+  } catch (_) {
+    // Extension not connected on quick probe
   }
+
+  // Guide user immediately on how to load the extension
+  console.log(`\n${style.bold}${style.cyan}.dex Capture Bridge Extension${style.reset}`);
+  console.log(`${style.yellow}Browser extension not connected yet. To capture live tabs:${style.reset}`);
+  console.log(`  Folder: ${style.bold}${getCaptureExtensionPath()}${style.reset}`);
+  console.log('  1. Open chrome://extensions (or edge://extensions)');
+  console.log('  2. Enable "Developer mode" toggle');
+  console.log('  3. Click "Load unpacked" and select the folder above.\n');
+
+  const shouldWait = await askYesNo('Have you loaded the extension and want to capture browser tabs now? (y/N): ', context);
+
+  if (shouldWait) {
+    console.log('Connecting to browser extension (click the .dex extension icon in your browser to connect)...');
+    try {
+      const extensionTabs = await requestBrowserTabs(15000);
+      return {
+        tabs: extensionTabs.map(tab => tab.url),
+        tabDetails: extensionTabs,
+        warnings: []
+      };
+    } catch (err) {
+      console.log(`${style.yellow}Could not connect to extension: ${err.message}. Proceeding without browser tabs.${style.reset}`);
+      return {
+        tabs: [],
+        tabDetails: [],
+        warnings: []
+      };
+    }
+  }
+
+  console.log(`${style.dim}Proceeding without browser tabs...${style.reset}`);
+  return {
+    tabs: [],
+    tabDetails: [],
+    warnings: []
+  };
 }
 
 function isTerminalApp(app) {
@@ -94,7 +127,7 @@ async function saveSnapshot(name, options = {}, context = {}) {
     console.log(`${tick} Created snapshot "${name}".`);
   }
 
-  const { tabs, tabDetails, warnings } = await captureBrowserTabs();
+  const { tabs, tabDetails, warnings } = await captureBrowserTabs(context);
   const { getRunningVsCodeFolders } = await import('../core/osApps.js');
   const ideFolders = getRunningVsCodeFolders();
   const osApps = await filterTerminalApps(getRunningGuiApps(), context);
