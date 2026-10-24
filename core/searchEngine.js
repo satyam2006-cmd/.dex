@@ -191,42 +191,61 @@ export async function findLaunchCandidate(query, options = {}) {
 }
 
 export async function interactiveSelect(query = '', options = {}) {
-  const initialResults = await search(query, { limit: options.limit || 10 });
-  if (initialResults.length === 0) return null;
+  if (!process.stdin.isTTY || !process.stdout.isTTY) {
+    return null;
+  }
+
+  const candidates = options.results || await search(query, { limit: options.limit || 10 });
+  if (!candidates || candidates.length === 0) return null;
 
   try {
-    const { AutoComplete, Select } = await import('enquirer');
-    if (AutoComplete) {
+    const enquirerModule = await import('enquirer');
+    const Enquirer = enquirerModule.default || enquirerModule;
+    const { AutoComplete, Select } = Enquirer;
+
+    let selectedId = null;
+
+    if (!query && AutoComplete) {
+      const allItems = getSearchIndex();
       const prompt = new AutoComplete({
         name: 'result',
         message: options.message || 'Search',
-        initial: query,
         limit: options.limit || 10,
-        choices: initialResults.map(result => ({
+        pointer(choice, i) {
+          return this.index === i ? '❯ ' : '  ';
+        },
+        choices: allItems.map(result => ({
           name: result.id,
           message: resultLabel(result),
           value: result.id
         })),
         async suggest(input, choices) {
-          const results = await search(input || query, { limit: options.limit || 10 });
+          const results = await search(input, { limit: options.limit || 10 });
           const allowed = new Set(results.map(result => result.id));
           return choices.filter(choice => allowed.has(choice.name));
         }
       });
-      const selectedId = await prompt.run();
-      return searchById(selectedId);
+      selectedId = await prompt.run();
+    } else if (Select) {
+      const prompt = new Select({
+        name: 'result',
+        message: options.message || 'Select app',
+        pointer(choice, i) {
+          return this.index === i ? '❯ ' : '  ';
+        },
+        choices: candidates.map(result => ({
+          name: result.id,
+          message: resultLabel(result),
+          value: result.id
+        }))
+      });
+      selectedId = await prompt.run();
     }
 
-    const prompt = new Select({
-      name: 'result',
-      message: options.message || 'Select result',
-      choices: initialResults.map(result => ({ name: resultLabel(result), value: result.id }))
-    });
-    const selectedId = await prompt.run();
-    return searchById(selectedId);
+    if (!selectedId) return null;
+    return candidates.find(item => item.id === selectedId) || searchById(selectedId);
   } catch (err) {
-    if (err?.name === 'CancelPromptError' || err?.message === 'cancelled') return null;
-    return initialResults[0];
+    return null;
   }
 }
 

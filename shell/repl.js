@@ -355,8 +355,22 @@ export async function startRepl() {
             console.log(`${style.red}Failed to launch "${exact.name}".${style.reset}`);
           }
         } else if (results.length > 0) {
-          printResults(results.slice(0, 4));
-          const selected = await interactiveSelect(query, { message: 'Select app' });
+          let selected = null;
+          if (process.stdin.isTTY && process.stdout.isTTY) {
+            rl.pause();
+            try {
+              selected = await interactiveSelect(query, {
+                message: 'Select app',
+                results: results.slice(0, 10)
+              });
+            } finally {
+              rl.resume();
+            }
+          } else {
+            printResults(results.slice(0, 4));
+            continue;
+          }
+
           if (selected) {
             console.log(`Launching ${selected.name}...`);
             await launch(selected);

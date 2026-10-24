@@ -51,9 +51,15 @@ async function main() {
         console.log(`Launching ${exact.name}...`);
         const success = await launch(exact);
         if (success) return;
-      } else if (results.length > 0 && process.stdin.isTTY && process.stdout.isTTY) {
-        printResults(results.slice(0, 4));
-        const selected = await interactiveSelect(query, { message: 'Select app' });
+      } else if (results.length > 0) {
+        if (!process.stdin.isTTY || !process.stdout.isTTY) {
+          printResults(results.slice(0, 4));
+          return;
+        }
+        const selected = await interactiveSelect(query, {
+          message: 'Select app',
+          results: results.slice(0, 10)
+        });
         if (selected) {
           console.log(`Launching ${selected.name}...`);
           const success = await launch(selected);

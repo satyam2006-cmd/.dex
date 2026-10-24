@@ -4,7 +4,7 @@ import { buildSearchIndex, interactiveSelect, launch, printResults, search } fro
 export default {
   name: 'search',
   description: 'Search apps, workspaces, snapshots, profiles, and commands',
-  async execute(args) {
+  async execute(args, context = {}) {
     if (args.includes('--refresh')) {
       buildSearchIndex({ force: true });
       console.log(`${style.green}Search index refreshed.${style.reset}`);
@@ -19,7 +19,13 @@ export default {
         console.log(`${style.red}Interactive search requires a TTY. Use: search <query>${style.reset}`);
         return;
       }
-      const selected = await interactiveSelect('', { message: 'Search' });
+      if (context.rl) context.rl.pause();
+      let selected = null;
+      try {
+        selected = await interactiveSelect('', { message: 'Search' });
+      } finally {
+        if (context.rl) context.rl.resume();
+      }
       if (selected) {
         console.log(`Launching ${selected.name}...`);
         await launch(selected);
